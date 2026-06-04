@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beat Sequencer</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Bebas+Neue&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0e0e;
+    --surface: #1a1a1a;
+    --border: #333;
+    --accent: #4fc3f7;
+    --accent2: #ff5c5c;
+    --text: #f0f0f0;
+    --muted: #666;
+    --gap: 3px;
+    /* label wide enough for "Closed HH" */
+    --label-w: 76px;
+    --cell-a: #252525;
+    --cell-b: #1c1c1c;
+    /* outer padding: body 20px×2 + beat-block 16px×2 = 72px total */
+    --outer-pad: 72px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    min-height: 100vh;
+    padding: 28px 20px 80px;
+  }
+
+  .page-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 48px;
+    letter-spacing: 2px;
+    margin-bottom: 28px;
+    text-align: center;
+  }
+
+  .toolbar {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 28px;
+  }
+
+  button {
+    cursor: pointer;
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 1px;
+    border: none;
+    transition: all 0.15s;
+  }
+
+  .btn-add {
+    background: var(--accent);
+    color: #000;
+    padding: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  }
+  .btn-add:hover { background: #81d4fa; transform: translateY(-1px); }
+
+  .btn-save {
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 10px;
+    text-transform: uppercase;
+  }
+  .btn-save:hover { background: rgba(79,195,247,0.1); }
+
+  .btn-load {
+    background: transparent;
+    color: #a0e080;
+    border: 1px solid #a0e080;
+    padding: 10px;
+    text-transform: uppercase;
+  }
+  .btn-load:hover { background: rgba(160,224,128,0.1); }
+
+  /* ── Beat block ── */
+  #beats-container { display: flex; flex-direction: column; gap: 36px; }
+
+  .beat-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--accent);
+    padding: 16px 16px 20px;
+    animation: slideIn 0.22s ease;
+  }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .beat-block.locked .cell { cursor: default; pointer-events: none; }
+  .beat-block.locked .beat-name { pointer-events: none; opacity: 0.75; }
+  .beat-block.locked .beat-bpm { pointer-events: none; opacity: 0.75; }
+  .beat-block.locked .btn-clear-pattern { opacity: 0.25; pointer-events: none; }
+
+  /* ── Header row: name + buttons on same line ── */
+  .beat-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+    flex-wrap: nowrap;
+  }
+
+  .beat-name {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(18px, 3vw, 26px);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid var(--border);
+    color: var(--text);
+    outline: none;
+    min-width: 0;
+    flex: 1 1 auto;
+    transition: border-color 0.2s;
+    line-height: 1.2;
+  }
+  .beat-name:focus { border-color: var(--accent); }
+
+  /* Icon buttons */
+  .btn-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--muted);
+    padding: 0;
+    flex-shrink: 0;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+  }
+  .btn-icon svg { display: block; }
+  .btn-icon.btn-edit:hover     { color: #f0c040; border-color: #f0c040; }
+  .btn-icon.btn-edit.editing   { color: #f0c040; border-color: #f0c040; background: rgba(240,192,64,0.08); }
+  .btn-icon.btn-clear-pattern:hover { color: #fff; border-color: #888; }
+  .btn-icon.btn-delete:hover { color: var(--accent2); border-color: var(--accent2); background: rgba(255,92,92,0.07); }
+
+  /* ── BPM row (below name line) ── */
+  .beat-meta {
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+    margin-bottom: 12px;
+  }
+  .bpm-label {
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .beat-bpm {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    outline: none;
+    width: 44px;
+    line-height: 1;
+    -moz-appearance: textfield;
+  }
+  .beat-bpm::-webkit-outer-spin-button,
+  .beat-bpm::-webkit-inner-spin-button { -webkit-appearance: none; }
+  .beat-bpm:focus { color: var(--accent); }
+
+  /* ── Grid: 16 steps visible, scroll for 32 ── */
+  .grid-wrapper {
+    overflow-x: auto;
+    /* hide scrollbar visually but keep scroll */
+    scrollbar-width: thin;
+    scrollbar-color: #333 transparent;
+  }
+  .grid-wrapper::-webkit-scrollbar { height: 4px; }
+  .grid-wrapper::-webkit-scrollbar-track { background: transparent; }
+  .grid-wrapper::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+
+  .grid {
+    /* portrait: 16 steps visible */
+    --cell: calc((100vw - var(--outer-pad) - var(--label-w) - 17 * var(--gap)) / 16);
+    display: grid;
+    grid-template-columns: var(--label-w) repeat(32, var(--cell));
+    gap: var(--gap);
+    width: calc(var(--label-w) + 32 * var(--cell) + 33 * var(--gap));
+  }
+
+  @media (orientation: landscape) {
+    .grid {
+      /* landscape: all 32 steps fit */
+      --cell: calc((100vw - var(--outer-pad) - var(--label-w) - 33 * var(--gap)) / 32);
+    }
+  }
+
+  .row-label {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 6px;
+    font-size: 9px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    height: var(--cell);
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  .step-num {
+    font-size: 9px;
+    color: #444;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: calc(var(--cell) * 0.7);
+    user-select: none;
+  }
+  .step-num.beat-mark { color: var(--muted); font-weight: 700; }
+
+  /* ── Cells ── */
+  .cell {
+    height: var(--cell);
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background 0.08s, transform 0.08s;
+  }
+  .cell.grp-a { background: var(--cell-a); border: 1px solid #2e2e2e; }
+  .cell.grp-b { background: var(--cell-b); border: 1px solid #252525; }
+
+  .beat-block:not(.locked) .cell:hover { filter: brightness(1.7); transform: scale(1.05); }
+
+  .cell.active.ti-0 { background: #9c7fe8; border-color: #9c7fe8; }
+  .cell.active.ti-1 { background: #888;    border-color: #888; }
+  .cell.active.ti-2 { background: #b0b0b0; border-color: #b0b0b0; }
+  .cell.active.ti-3 { background: #d4830f; border-color: #d4830f; }
+  .cell.active.ti-4 { background: #e8b84b; border-color: #e8b84b; }
+  .cell.active.ti-5 { background: #4fc3f7; border-color: #4fc3f7; }
+  .cell.active.ti-6 { background: #e0e0e0; border-color: #e0e0e0; }
+
+  /* ── Empty state ── */
+  #empty-state {
+    text-align: center;
+    padding: 80px 20px;
+    color: var(--muted);
+    border: 2px dashed var(--border);
+  }
+  #empty-state h2 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 34px;
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+    color: #444;
+  }
+  #empty-state p { font-size: 12px; }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed;
+    bottom: 28px;
+    right: 28px;
+    background: var(--accent);
+    color: #000;
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 12px 20px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: all 0.25s;
+    pointer-events: none;
+    z-index: 999;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<h1 class="page-title">BEAT SEQUENCER</h1>
+
+<div class="toolbar">
+  <button class="btn-add" onclick="addBeat()">Beat</button>
+  <button class="btn-save" onclick="saveToJSON()">Save</button>
+  <button class="btn-load" onclick="loadFromJSON()">Load</button>
+</div>
+<input type="file" id="file-input" accept=".json" style="display:none" onchange="handleFileLoad(event)">
+
+<div id="beats-container"></div>
+<div id="empty-state">
+  <h2>Aucun beat</h2>
+  <p>Cliquez sur « Ajouter un beat » pour commencer</p>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const TRACKS = ['Perc','Open HH','Closed HH','Alt Snare','Snare','Alt Kick','Kick'];
+  const STEPS = 32;
+  const STORAGE_KEY = 'beat_sequencer_v3';
+
+  let beats = [];
+  let beatCounter = 0;
+
+  /* ── SVG icons ── */
+  const SVG_LOCK_OPEN = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+    <path d="M7 11V7a5 5 0 0 1 9.9-1"/>
+  </svg>`;
+
+  const SVG_LOCK_CLOSED = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+  </svg>`;
+
+  const SVG_BROOM = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 5H9l-7 7 7 7h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z"/>
+    <line x1="18" y1="9" x2="12" y2="15"/>
+    <line x1="12" y1="9" x2="18" y2="15"/>
+  </svg>`;
+
+  const SVG_CROSS = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+    <line x1="18" y1="6" x2="6" y2="18"/>
+    <line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>`;
+
+  /* ── Storage ── */
+  function loadFromStorage() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const data = JSON.parse(raw);
+        beats = data.beats || [];
+        beatCounter = data.beatCounter || beats.length;
+      }
+    } catch(e) {}
+    renderAll();
+  }
+
+  function saveToStorage() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ beats, beatCounter }));
+    } catch(e) {}
+  }
+
+  /* ── Beat CRUD ── */
+  function emptyPattern() {
+    return TRACKS.map(() => new Array(STEPS).fill(false));
+  }
+
+  function addBeat() {
+    beatCounter++;
+    const beat = {
+      id: String(Date.now()) + String(Math.random()).slice(2),
+      name: `Beat ${beatCounter}`,
+      bpm: 80,
+      pattern: emptyPattern(),
+      editing: true
+    };
+    beats.push(beat);
+    renderAll();
+    saveToStorage();
+  }
+
+  function deleteBeat(id) {
+    beats = beats.filter(b => b.id !== id);
+    renderAll();
+    saveToStorage();
+  }
+
+  function clearPattern(id) {
+    const b = beats.find(b => b.id === id);
+    if (!b || !b.editing) return;
+    b.pattern = emptyPattern();
+    const block = document.querySelector(`.beat-block[data-id="${id}"]`);
+    if (block) block.querySelectorAll('.cell').forEach(c => c.classList.remove('active'));
+    saveToStorage();
+  }
+
+  function toggleCell(id, ti, step) {
+    const b = beats.find(b => b.id === id);
+    if (!b || !b.editing) return;
+    b.pattern[ti][step] = !b.pattern[ti][step];
+    const cell = document.querySelector(`.beat-block[data-id="${id}"] [data-track="${ti}"][data-step="${step}"]`);
+    if (cell) cell.classList.toggle('active', b.pattern[ti][step]);
+    saveToStorage();
+  }
+
+  function updateName(id, val) {
+    const b = beats.find(b => b.id === id);
+    if (b) { b.name = val; saveToStorage(); }
+  }
+
+  function updateBpm(id, val) {
+    const b = beats.find(b => b.id === id);
+    if (b) { b.bpm = parseInt(val) || 0; saveToStorage(); }
+  }
+
+  function toggleEdit(id) {
+    const b = beats.find(b => b.id === id);
+    if (!b) return;
+    b.editing = !b.editing;
+    const block = document.querySelector(`.beat-block[data-id="${id}"]`);
+    if (!block) return;
+    block.classList.toggle('locked', !b.editing);
+    const btn = block.querySelector('.btn-edit');
+    if (btn) {
+      btn.innerHTML = b.editing ? SVG_LOCK_OPEN : SVG_LOCK_CLOSED;
+      btn.classList.toggle('editing', b.editing);
+      btn.title = b.editing ? 'Verrouiller' : 'Modifier';
+    }
+    const nameInput = block.querySelector('.beat-name');
+    if (nameInput) nameInput.readOnly = !b.editing;
+    const bpmInput2 = block.querySelector('.beat-bpm');
+    if (bpmInput2) bpmInput2.readOnly = !b.editing;
+    saveToStorage();
+  }
+
+  /* ── Render ── */
+  function renderAll() {
+    const container = document.getElementById('beats-container');
+    const empty = document.getElementById('empty-state');
+    container.innerHTML = '';
+    if (beats.length === 0) { empty.style.display = 'block'; return; }
+    empty.style.display = 'none';
+    beats.forEach(b => container.appendChild(buildBeatBlock(b)));
+  }
+
+  function buildBeatBlock(beat) {
+    const block = document.createElement('div');
+    block.className = 'beat-block' + (beat.editing ? '' : ' locked');
+    block.dataset.id = beat.id;
+
+    /* ── Header row: name + 3 icon buttons ── */
+    const hdr = document.createElement('div');
+    hdr.className = 'beat-header';
+
+    const nameInput = document.createElement('input');
+    nameInput.className = 'beat-name';
+    nameInput.value = beat.name;
+    nameInput.readOnly = !beat.editing;
+    nameInput.spellcheck = false;
+    nameInput.addEventListener('input', e => updateName(beat.id, e.target.value));
+
+    // Lock button
+    const btnEdit = document.createElement('button');
+    btnEdit.className = 'btn-icon btn-edit' + (beat.editing ? ' editing' : '');
+    btnEdit.innerHTML = beat.editing ? SVG_LOCK_OPEN : SVG_LOCK_CLOSED;
+    btnEdit.title = beat.editing ? 'Verrouiller' : 'Modifier';
+    btnEdit.onclick = () => toggleEdit(beat.id);
+
+    // Broom button
+    const btnClear = document.createElement('button');
+    btnClear.className = 'btn-icon btn-clear-pattern';
+    btnClear.innerHTML = SVG_BROOM;
+    btnClear.title = 'Effacer le pattern';
+    btnClear.onclick = () => clearPattern(beat.id);
+
+    // Delete button
+    const btnDel = document.createElement('button');
+    btnDel.className = 'btn-icon btn-delete';
+    btnDel.innerHTML = SVG_CROSS;
+    btnDel.title = 'Supprimer ce beat';
+    btnDel.onclick = () => deleteBeat(beat.id);
+
+    hdr.append(nameInput, btnEdit, btnClear, btnDel);
+    block.appendChild(hdr);
+
+    /* ── BPM row (below name) ── */
+    const meta = document.createElement('div');
+    meta.className = 'beat-meta';
+
+    const bpmLabel = document.createElement('span');
+    bpmLabel.className = 'bpm-label';
+    bpmLabel.textContent = 'BPM';
+
+    const bpmInput = document.createElement('input');
+    bpmInput.className = 'beat-bpm';
+    bpmInput.type = 'number';
+    bpmInput.min = 20;
+    bpmInput.max = 300;
+    bpmInput.value = beat.bpm || 80;
+    bpmInput.readOnly = !beat.editing;
+    bpmInput.addEventListener('input', e => updateBpm(beat.id, e.target.value));
+
+    meta.append(bpmLabel, bpmInput);
+    block.appendChild(meta);
+
+    /* ── Grid ── */
+    const wrapper = document.createElement('div');
+    wrapper.className = 'grid-wrapper';
+    const grid = document.createElement('div');
+    grid.className = 'grid';
+
+    // Step numbers
+    const emptyLbl = document.createElement('div');
+    emptyLbl.className = 'step-num';
+    grid.appendChild(emptyLbl);
+    for (let s = 0; s < STEPS; s++) {
+      const n = document.createElement('div');
+      n.className = 'step-num' + (s % 4 === 0 ? ' beat-mark' : '');
+      n.textContent = s % 4 === 0 ? (s / 4 + 1) : '';
+      grid.appendChild(n);
+    }
+
+    // Track rows
+    TRACKS.forEach((track, ti) => {
+      const lbl = document.createElement('div');
+      lbl.className = 'row-label';
+      lbl.textContent = track;
+      grid.appendChild(lbl);
+
+      for (let s = 0; s < STEPS; s++) {
+        const cell = document.createElement('div');
+        const grp = Math.floor(s / 4) % 2 === 0 ? 'grp-a' : 'grp-b';
+        cell.className = `cell ${grp} ti-${ti}`;
+        cell.dataset.track = ti;
+        cell.dataset.step = s;
+        if (beat.pattern[ti][s]) cell.classList.add('active');
+        cell.addEventListener('click', () => toggleCell(beat.id, ti, s));
+        grid.appendChild(cell);
+      }
+    });
+
+    wrapper.appendChild(grid);
+    block.appendChild(wrapper);
+    return block;
+  }
+
+  /* ── Export ── */
+  function saveToJSON() {
+    if (beats.length === 0) { showToast('Aucun beat à exporter !'); return; }
+    const data = {
+      version: 3,
+      exportedAt: new Date().toISOString(),
+      beats: beats.map(b => ({
+        name: b.name,
+        bpm: b.bpm || 80,
+        tracks: TRACKS.map((track, ti) => ({
+          name: track,
+          steps: b.pattern[ti]
+        }))
+      }))
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'beats.json';
+    a.click();
+    showToast('JSON exporté !');
+  }
+
+  function loadFromJSON() {
+    document.getElementById('file-input').click();
+  }
+
+  function handleFileLoad(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const data = JSON.parse(e.target.result);
+        if (!data.beats || !Array.isArray(data.beats)) throw new Error();
+        beats = data.beats.map(b => {
+          // rebuild pattern from tracks array
+          const pattern = TRACKS.map(trackName => {
+            const found = b.tracks.find(t => t.name === trackName);
+            return found ? found.steps : new Array(STEPS).fill(false);
+          });
+          return {
+            id: String(Date.now()) + String(Math.random()).slice(2),
+            name: b.name || 'Beat',
+            bpm: b.bpm || 80,
+            pattern,
+            editing: false
+          };
+        });
+        beatCounter = beats.length;
+        saveToStorage();
+        renderAll();
+        showToast('Fichier chargé !');
+      } catch(err) {
+        showToast('Fichier invalide');
+      }
+      // reset input so same file can be re-loaded
+      event.target.value = '';
+    };
+    reader.readAsText(file);
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2200);
+  }
+
+  loadFromStorage();
+</script>
+</body>
+</html>
