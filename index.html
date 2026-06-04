@@ -16,9 +16,9 @@
     --muted: #666;
     --gap: 3px;
     --label-w: 82px;
-    --cell-a: #252525;
-    --cell-b: #1c1c1c;
-    --outer-pad: 72px;
+    --cell-a: #323232;
+    --cell-b: #262626;
+    --outer-pad: 16px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -26,7 +26,7 @@
     color: var(--text);
     font-family: 'Space Mono', monospace;
     min-height: 100vh;
-    padding: 28px 20px 80px;
+    padding: 28px 0 80px;
   }
 
   .page-title {
@@ -35,6 +35,7 @@
     letter-spacing: 2px;
     margin-bottom: 28px;
     text-align: center;
+    padding: 0 8px;
   }
 
   /* ── Toolbar ── */
@@ -43,6 +44,7 @@
     grid-template-columns: repeat(3, 1fr);
     gap: 10px;
     margin-bottom: 28px;
+    padding: 0 8px;
   }
   button {
     cursor: pointer;
@@ -78,13 +80,18 @@
   }
   .btn-load:hover { background: rgba(160,224,128,0.1); }
 
-  /* ── Beat block ── */
-  #beats-container { display: flex; flex-direction: column; gap: 36px; }
+  .btn-sort {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 10px;
+    text-transform: uppercase;
+  }
+  .btn-sort:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+  #beats-container { display: flex; flex-direction: column; gap: 0; }
   .beat-block {
     background: var(--surface);
-    border: 1px solid var(--border);
-    border-top: 3px solid var(--accent);
-    padding: 16px 16px 20px;
+    padding: 12px 8px 24px;
     animation: slideIn 0.22s ease;
   }
   @keyframes slideIn {
@@ -113,7 +120,7 @@
     font-size: clamp(18px, 3vw, 26px);
     background: transparent;
     border: none;
-    border-bottom: 2px solid var(--border);
+    border-bottom: 2px solid var(--beat-color, var(--border));
     color: var(--text);
     outline: none;
     min-width: 0;
@@ -121,7 +128,7 @@
     transition: border-color 0.2s;
     line-height: 1.2;
   }
-  .beat-name:focus { border-color: var(--accent); }
+  .beat-name:focus { border-color: var(--beat-color, var(--accent)); }
   .btn-icon {
     display: flex;
     align-items: center;
@@ -175,19 +182,17 @@
     overflow-x: auto;
     scrollbar-width: thin;
     scrollbar-color: #333 transparent;
+    margin-bottom: 4px;
   }
   .grid-wrapper::-webkit-scrollbar { height: 4px; }
   .grid-wrapper::-webkit-scrollbar-track { background: transparent; }
   .grid-wrapper::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
   .grid {
-    --cell: calc((100vw - var(--outer-pad) - var(--label-w) - 17 * var(--gap)) / 16);
+    --cell: calc((100vw - var(--outer-pad) - var(--label-w) - 33 * var(--gap)) / 32);
     display: grid;
     grid-template-columns: var(--label-w) repeat(32, var(--cell));
     gap: var(--gap);
     width: calc(var(--label-w) + 32 * var(--cell) + 33 * var(--gap));
-  }
-  @media (orientation: landscape) {
-    .grid { --cell: calc((100vw - var(--outer-pad) - var(--label-w) - 33 * var(--gap)) / 32); }
   }
 
   /* ── Row label ── */
@@ -199,7 +204,6 @@
     gap: 3px;
     padding-right: 4px;
   }
-  /* color swatch */
   .color-swatch {
     width: 11px;
     height: 11px;
@@ -223,7 +227,7 @@
   .row-label-input {
     font-family: 'Space Mono', monospace;
     font-size: 9px;
-    color: var(--muted);
+    color: #888;
     background: transparent;
     border: none;
     outline: none;
@@ -255,7 +259,6 @@
   }
   .btn-del-track:hover { color: var(--accent2); }
 
-  /* step numbers */
   .step-num {
     font-size: 9px;
     color: #444;
@@ -274,25 +277,35 @@
     cursor: pointer;
     transition: background 0.08s, transform 0.08s;
   }
-  .cell.grp-a { background: var(--cell-a); border: 1px solid #2e2e2e; }
-  .cell.grp-b { background: var(--cell-b); border: 1px solid #252525; }
+  @media (orientation: portrait) {
+    .grid {
+      --cell: calc((100vw - var(--outer-pad) - var(--label-w) - 33 * 1px) / 32);
+      gap: 1px;
+      width: calc(var(--label-w) + 32 * var(--cell) + 33 * 1px);
+      grid-template-columns: var(--label-w) repeat(32, var(--cell));
+    }
+    .cell { border-radius: 1px; }
+  }
+  .cell.grp-a { background: var(--cell-a); }
+  .cell.grp-b { background: var(--cell-b); }
   .beat-block:not(.locked) .cell:hover { filter: brightness(1.7); transform: scale(1.05); }
 
   /* ── Add track ── */
-  .add-track-row { display: flex; align-items: center; margin-top: 8px; }
+  .add-track-row { display: flex; align-items: center; margin-top: 0; }
   .btn-add-track {
-    font-size: 10px;
-    color: #444;
+    font-size: 9px !important;
+    color: #888 !important;
     background: transparent;
     border: none;
-    padding: 5px 0;
-    letter-spacing: 1px;
+    padding: 3px 0;
+    letter-spacing: 0.3px !important;
     text-transform: uppercase;
     width: 100%;
     text-align: left;
     transition: color 0.15s;
+    font-family: 'Space Mono', monospace !important;
   }
-  .btn-add-track:hover { color: var(--muted); }
+  .btn-add-track:hover { color: var(--text) !important; }
 
   /* ── Empty state ── */
   #empty-state {
@@ -390,17 +403,16 @@
 
 <h1 class="page-title">BEAT SEQUENCER</h1>
 
-<div class="toolbar">
+<div class="toolbar" style="grid-template-columns: repeat(4, 1fr);">
   <button class="btn-add" onclick="addBeat()">Beat</button>
   <button class="btn-save" onclick="saveToJSON()">Save</button>
   <button class="btn-load" onclick="loadFromJSON()">Load</button>
+  <button class="btn-sort" id="btn-sort" onclick="cycleSortBeats()">Trier</button>
 </div>
-<input type="file" id="file-input" accept=".json" style="display:none" onchange="handleFileLoad(event)">
-
 <div id="beats-container"></div>
 <div id="empty-state">
   <h2>Aucun beat</h2>
-  <p>Cliquez sur « Beat » pour commencer</p>
+  <p>Cliquez sur &laquo; Beat &raquo; pour commencer</p>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -415,62 +427,82 @@
   let beatCounter = 0;
 
   /* ── SVG icons ── */
-  const SVG_LOCK_OPEN = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>`;
-  const SVG_LOCK_CLOSED = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`;
-  const SVG_ERASE = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 5H9l-7 7 7 7h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z"/><line x1="18" y1="9" x2="12" y2="15"/><line x1="12" y1="9" x2="18" y2="15"/></svg>`;
-  const SVG_CROSS = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+  const SVG_LOCK_OPEN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>';
+  const SVG_LOCK_CLOSED = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
+  const SVG_ERASE = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 5H9l-7 7 7 7h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z"/><line x1="18" y1="9" x2="12" y2="15"/><line x1="12" y1="9" x2="18" y2="15"/></svg>';
+  const SVG_CROSS = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+
+  /* ── Safe storage ── */
+  var _store = (function() {
+    try {
+      localStorage.setItem('_t_', '1');
+      localStorage.removeItem('_t_');
+      return localStorage;
+    } catch(e) {
+      var m = {};
+      return {
+        getItem: function(k) { return m[k] !== undefined ? m[k] : null; },
+        setItem: function(k, v) { m[k] = v; },
+        removeItem: function(k) { delete m[k]; }
+      };
+    }
+  }());
 
   /* ── Confirm modal ── */
   function showConfirm(msg, onConfirm) {
-    const escaped = msg.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
-    overlay.innerHTML = `
-      <div class="modal">
-        <p>${escaped}</p>
-        <div class="modal-btns">
-          <button class="modal-btn-cancel">Annuler</button>
-          <button class="modal-btn-confirm">Supprimer</button>
-        </div>
-      </div>`;
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    const p = document.createElement('p');
+    p.textContent = msg;
+    const btns = document.createElement('div');
+    btns.className = 'modal-btns';
+    const bCancel = document.createElement('button');
+    bCancel.className = 'modal-btn-cancel';
+    bCancel.textContent = 'Annuler';
+    bCancel.onclick = () => document.body.removeChild(overlay);
+    const bConfirm = document.createElement('button');
+    bConfirm.className = 'modal-btn-confirm';
+    bConfirm.textContent = 'Supprimer';
+    bConfirm.onclick = () => { document.body.removeChild(overlay); onConfirm(); };
+    btns.append(bCancel, bConfirm);
+    modal.append(p, btns);
+    overlay.appendChild(modal);
     document.body.appendChild(overlay);
-    overlay.querySelector('.modal-btn-cancel').onclick = () => document.body.removeChild(overlay);
-    overlay.querySelector('.modal-btn-confirm').onclick = () => {
-      document.body.removeChild(overlay);
-      onConfirm();
-    };
     overlay.addEventListener('click', e => { if (e.target === overlay) document.body.removeChild(overlay); });
   }
 
   /* ── Storage ── */
   function loadFromStorage() {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = _store.getItem(STORAGE_KEY);
       if (raw) {
         const data = JSON.parse(raw);
         beats = (data.beats || []).map(b => ({
           id: b.id || uid(),
           name: b.name || 'Beat',
           bpm: b.bpm || 80,
+          accent: b.accent || randomAccent(),
           tracks: Array.isArray(b.tracks) && b.tracks.length
             ? b.tracks.map(t => typeof t === 'string' ? t : (t.name || 'Track'))
             : [...DEFAULT_TRACKS],
           colors: Array.isArray(b.colors) && b.colors.length
             ? b.colors
             : [...DEFAULT_COLORS],
-          pattern: Array.isArray(b.pattern) && b.pattern.length ? b.pattern : emptyPattern(Array.isArray(b.tracks) && b.tracks.length ? b.tracks.length : DEFAULT_TRACKS.length),
-          editing: b.editing === true
+          pattern: Array.isArray(b.pattern) && b.pattern.length
+            ? b.pattern
+            : emptyPattern(Array.isArray(b.tracks) ? b.tracks.length : DEFAULT_TRACKS.length),
+          editing: false
         }));
         beatCounter = data.beatCounter || beats.length;
       }
-    } catch(e) {}
+    } catch(e) { beats = []; beatCounter = 0; }
     renderAll();
   }
 
   function saveToStorage() {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ beats, beatCounter }));
-    } catch(e) {}
+    try { _store.setItem(STORAGE_KEY, JSON.stringify({ beats, beatCounter })); } catch(e) {}
   }
 
   /* ── Beat CRUD ── */
@@ -483,16 +515,22 @@
     const tracks = [...DEFAULT_TRACKS];
     const colors = [...DEFAULT_COLORS];
     beats.push({
-      id: uid(), name: `Beat ${beatCounter}`, bpm: 80,
+      id: uid(), name: 'Beat ' + beatCounter, bpm: 80,
+      accent: randomAccent(),
       tracks, colors, pattern: emptyPattern(tracks.length), editing: true
     });
     renderAll();
     saveToStorage();
   }
 
+  function randomAccent() {
+    var hue = Math.floor(Math.random() * 360);
+    return 'hsl(' + hue + ', 70%, 60%)';
+  }
+
   function deleteBeat(id) {
     const b = beats.find(b => b.id === id);
-    showConfirm(`Supprimer le beat « ${b ? b.name : ''} » ?`, () => {
+    showConfirm('Supprimer le beat ' + (b ? b.name : '') + ' ?', () => {
       beats = beats.filter(b => b.id !== id);
       renderAll();
       saveToStorage();
@@ -503,7 +541,7 @@
     const b = beats.find(b => b.id === id);
     if (!b || !b.editing) return;
     b.pattern = emptyPattern(b.tracks.length);
-    const block = document.querySelector(`.beat-block[data-id="${id}"]`);
+    const block = document.querySelector('.beat-block[data-id="' + id + '"]');
     if (block) block.querySelectorAll('.cell.active').forEach(c => {
       c.classList.remove('active');
       c.style.background = '';
@@ -517,7 +555,7 @@
     if (!b || !b.editing) return;
     if (!b.pattern[ti] || step < 0 || step >= STEPS) return;
     b.pattern[ti][step] = !b.pattern[ti][step];
-    const cell = document.querySelector(`.beat-block[data-id="${id}"] [data-track="${ti}"][data-step="${step}"]`);
+    const cell = document.querySelector('.beat-block[data-id="' + id + '"] [data-track="' + ti + '"][data-step="' + step + '"]');
     if (cell) {
       const active = b.pattern[ti][step];
       cell.classList.toggle('active', active);
@@ -550,15 +588,15 @@
     const b = beats.find(b => b.id === id);
     if (!b || ti < 0 || ti >= b.tracks.length) return;
     b.colors[ti] = color;
-    const block = document.querySelector(`.beat-block[data-id="${id}"]`);
+    const block = document.querySelector('.beat-block[data-id="' + id + '"]');
     if (block) {
-      const swatch = block.querySelector(`.color-swatch[data-ti="${ti}"]`);
+      const swatch = block.querySelector('.color-swatch[data-ti="' + ti + '"]');
       if (swatch) {
         swatch.style.background = color;
         const inp = swatch.querySelector('input[type=color]');
         if (inp) inp.value = color;
       }
-      block.querySelectorAll(`[data-track="${ti}"].active`).forEach(c => {
+      block.querySelectorAll('[data-track="' + ti + '"].active').forEach(c => {
         c.style.background = color;
         c.style.borderColor = color;
       });
@@ -579,7 +617,7 @@
   function deleteTrack(id, ti) {
     const b = beats.find(b => b.id === id);
     if (!b || b.tracks.length <= 1) return;
-    showConfirm(`Supprimer la piste « ${b.tracks[ti]} » ?`, () => {
+    showConfirm('Supprimer la piste ' + b.tracks[ti] + ' ?', () => {
       b.tracks.splice(ti, 1);
       b.colors.splice(ti, 1);
       b.pattern.splice(ti, 1);
@@ -592,7 +630,7 @@
     const b = beats.find(b => b.id === id);
     if (!b) return;
     b.editing = !b.editing;
-    const block = document.querySelector(`.beat-block[data-id="${id}"]`);
+    const block = document.querySelector('.beat-block[data-id="' + id + '"]');
     if (!block) return;
     block.classList.toggle('locked', !b.editing);
     const btn = block.querySelector('.btn-edit');
@@ -611,7 +649,7 @@
 
   function rebuildGrid(id) {
     const b = beats.find(b => b.id === id);
-    const block = document.querySelector(`.beat-block[data-id="${id}"]`);
+    const block = document.querySelector('.beat-block[data-id="' + id + '"]');
     if (!b || !block) return;
     const oldWrapper = block.querySelector('.grid-wrapper');
     const oldAdd = block.querySelector('.add-track-row');
@@ -620,7 +658,32 @@
     else block.appendChild(buildAddTrackRow(b));
   }
 
-  /* ── Render ── */
+  /* ── Sort ── */
+  var sortMode = -1;
+  var sortLabels = ['A\u2192Z', 'Z\u2192A', 'Nouveau', 'Ancien'];
+
+  function cycleSortBeats() {
+    if (beats.length < 2) return;
+    sortMode = (sortMode + 1) % 4;
+    if (sortMode === 0) {
+      // A→Z : A en premier
+      beats.sort(function(a, b) { return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : a.name.toLowerCase() > b.name.toLowerCase() ? 1 : 0; });
+    } else if (sortMode === 1) {
+      // Z→A : Z en premier
+      beats.sort(function(a, b) { return a.name.toLowerCase() > b.name.toLowerCase() ? -1 : a.name.toLowerCase() < b.name.toLowerCase() ? 1 : 0; });
+    } else if (sortMode === 2) {
+      // Nouveau : plus récent en premier
+      beats.sort(function(a, b) { return b.id > a.id ? 1 : -1; });
+    } else {
+      // Ancien : plus ancien en premier
+      beats.sort(function(a, b) { return a.id > b.id ? 1 : -1; });
+    }
+    var btn = document.getElementById('btn-sort');
+    if (btn) btn.textContent = sortLabels[sortMode];
+    renderAll();
+    saveToStorage();
+  }
+
   function renderAll() {
     const container = document.getElementById('beats-container');
     const empty = document.getElementById('empty-state');
@@ -631,9 +694,11 @@
   }
 
   function buildBeatBlock(beat) {
+    if (!beat.accent) beat.accent = randomAccent();
     const block = document.createElement('div');
     block.className = 'beat-block' + (beat.editing ? '' : ' locked');
     block.dataset.id = beat.id;
+    block.style.setProperty('--beat-color', beat.accent);
 
     const hdr = document.createElement('div');
     hdr.className = 'beat-header';
@@ -682,7 +747,6 @@
   }
 
   function buildGrid(beat) {
-    // ensure colors array is always valid before building
     if (!beat.colors) beat.colors = [];
     while (beat.colors.length < beat.tracks.length) {
       beat.colors.push(DEFAULT_COLORS[beat.colors.length % DEFAULT_COLORS.length]);
@@ -693,7 +757,6 @@
     const grid = document.createElement('div');
     grid.className = 'grid';
 
-    // Step numbers
     const emptyLbl = document.createElement('div');
     emptyLbl.className = 'step-num';
     grid.appendChild(emptyLbl);
@@ -706,12 +769,9 @@
 
     beat.tracks.forEach((track, ti) => {
       const color = beat.colors[ti] || '#888';
-
-      // label wrap: swatch + name + delete
       const lblWrap = document.createElement('div');
       lblWrap.className = 'row-label-wrap';
 
-      // color swatch
       const swatch = document.createElement('div');
       swatch.className = 'color-swatch';
       swatch.dataset.ti = ti;
@@ -731,7 +791,7 @@
 
       const btnDelTrack = document.createElement('button');
       btnDelTrack.className = 'btn-del-track';
-      btnDelTrack.innerHTML = '✕';
+      btnDelTrack.innerHTML = '&#x2715;';
       btnDelTrack.title = 'Supprimer cette piste';
       btnDelTrack.onclick = () => deleteTrack(beat.id, ti);
 
@@ -741,7 +801,7 @@
       for (let s = 0; s < STEPS; s++) {
         const cell = document.createElement('div');
         const grp = Math.floor(s / 4) % 2 === 0 ? 'grp-a' : 'grp-b';
-        cell.className = `cell ${grp}`;
+        cell.className = 'cell ' + grp;
         cell.dataset.track = ti;
         cell.dataset.step = s;
         if (beat.pattern[ti] && beat.pattern[ti][s]) {
@@ -749,7 +809,9 @@
           cell.style.background = color;
           cell.style.borderColor = color;
         }
-        cell.addEventListener('click', () => toggleCell(beat.id, ti, s));
+        cell.addEventListener('click', (function(ss, tti) {
+          return function() { toggleCell(beat.id, tti, ss); };
+        }(s, ti)));
         grid.appendChild(cell);
       }
     });
@@ -771,13 +833,14 @@
 
   /* ── Export / Import ── */
   async function saveToJSON() {
-    if (beats.length === 0) { showToast('Aucun beat à exporter !'); return; }
+    if (beats.length === 0) { showToast('Aucun beat a exporter'); return; }
     const data = {
       version: 4,
       exportedAt: new Date().toISOString(),
       beats: beats.map(b => ({
         name: b.name,
         bpm: b.bpm || 80,
+        accent: b.accent || randomAccent(),
         tracks: b.tracks.map((t, ti) => ({
           name: t,
           color: (b.colors && b.colors[ti]) || DEFAULT_COLORS[ti % DEFAULT_COLORS.length],
@@ -790,26 +853,46 @@
     try {
       await navigator.share({ files: [file] });
     } catch(e) {
-      if (e.name !== 'AbortError') showToast('Partage non supporté');
+      if (e.name !== 'AbortError') showToast('Partage non supporte');
     }
   }
 
-  function loadFromJSON() { document.getElementById('file-input').click(); }
-
-  function handleFileLoad(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = e => {
+  function loadFromJSON() {
+    const ov = document.createElement('div');
+    ov.className = 'modal-overlay';
+    ov.style.alignItems = 'flex-end';
+    ov.style.padding = '0';
+    const panel = document.createElement('div');
+    panel.style.cssText = 'background:#1a1a1a;border-top:3px solid #a0e080;padding:20px 16px 32px;width:100%;';
+    const h2 = document.createElement('div');
+    h2.style.cssText = 'font-family:Bebas Neue,sans-serif;font-size:20px;letter-spacing:1px;color:#f0f0f0;margin-bottom:8px;';
+    h2.textContent = 'Restaurer';
+    const hint = document.createElement('div');
+    hint.style.cssText = 'font-size:10px;color:#666;margin-bottom:10px;line-height:1.5;';
+    hint.textContent = 'Colle le contenu de ton fichier beats.json puis appuie sur Restaurer.';
+    const ta = document.createElement('textarea');
+    ta.style.cssText = 'display:block;width:100%;height:150px;background:#0e0e0e;border:1px solid #444;color:#a0e080;font-family:Space Mono,monospace;font-size:10px;padding:10px;resize:none;outline:none;-webkit-user-select:text;user-select:text;';
+    ta.placeholder = 'Colle ton JSON ici...';
+    const btns = document.createElement('div');
+    btns.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;';
+    const bCancel = document.createElement('button');
+    bCancel.style.cssText = 'background:transparent;color:#666;border:1px solid #333;padding:10px;text-transform:uppercase;font-size:12px;font-family:Space Mono,monospace;cursor:pointer;letter-spacing:1px;';
+    bCancel.textContent = 'Annuler';
+    bCancel.onclick = () => document.body.removeChild(ov);
+    const bOk = document.createElement('button');
+    bOk.style.cssText = 'background:#a0e080;color:#000;border:none;padding:10px;text-transform:uppercase;font-size:12px;font-weight:700;font-family:Space Mono,monospace;cursor:pointer;letter-spacing:1px;';
+    bOk.textContent = 'Restaurer';
+    bOk.onclick = () => {
+      const text = ta.value.trim();
+      if (!text) { showToast('Rien a coller'); return; }
       try {
-        const data = JSON.parse(e.target.result);
-        if (!data.beats || !Array.isArray(data.beats)) throw new Error('Format invalide');
+        const data = JSON.parse(text);
+        if (!data.beats || !Array.isArray(data.beats)) throw new Error();
         beats = data.beats.map(b => {
           const rawTracks = Array.isArray(b.tracks) && b.tracks.length ? b.tracks : [];
           return {
-            id: uid(),
-            name: b.name || 'Beat',
-            bpm: b.bpm || 80,
+            id: uid(), name: b.name || 'Beat', bpm: b.bpm || 80,
+            accent: b.accent || randomAccent(),
             tracks: rawTracks.map(t => t.name || 'Track'),
             colors: rawTracks.map((t, i) => t.color || DEFAULT_COLORS[i % DEFAULT_COLORS.length]),
             pattern: rawTracks.map(t => Array.isArray(t.steps) && t.steps.length === STEPS ? t.steps : new Array(STEPS).fill(false)),
@@ -817,15 +900,16 @@
           };
         });
         beatCounter = beats.length;
-        saveToStorage();
-        renderAll();
-        showToast('Fichier chargé !');
-      } catch(err) {
-        showToast('Fichier invalide');
-      }
-      event.target.value = '';
+        saveToStorage(); renderAll();
+        document.body.removeChild(ov);
+        showToast('Restaure !');
+      } catch(e) { showToast('JSON invalide'); }
     };
-    reader.readAsText(file);
+    btns.append(bCancel, bOk);
+    panel.append(h2, hint, ta, btns);
+    ov.appendChild(panel);
+    document.body.appendChild(ov);
+    setTimeout(() => ta.focus(), 50);
   }
 
   function showToast(msg) {
