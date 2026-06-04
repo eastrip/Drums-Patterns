@@ -556,11 +556,14 @@
       }))
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
+    a.href = url;
     a.download = 'beats.json';
+    document.body.appendChild(a);
     a.click();
-    showToast('JSON exporté !');
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+    showToast('Export en cours…');
   }
 
   function loadFromJSON() {
