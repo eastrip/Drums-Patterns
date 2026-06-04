@@ -80,6 +80,13 @@
   }
   .btn-load:hover { background: rgba(160,224,128,0.1); }
 
+  .toolbar-filters {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 28px;
+    padding: 0 8px;
+  }
   .btn-sort {
     background: transparent;
     color: var(--muted);
@@ -88,6 +95,41 @@
     text-transform: uppercase;
   }
   .btn-sort:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+  .bpm-filter {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    background: transparent;
+  }
+  .bpm-filter-label {
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .bpm-filter input {
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 16px;
+    width: 38px;
+    outline: none;
+    text-align: center;
+    -moz-appearance: textfield;
+  }
+  .bpm-filter input::-webkit-outer-spin-button,
+  .bpm-filter input::-webkit-inner-spin-button { -webkit-appearance: none; }
+  .bpm-filter input:focus { border-color: var(--accent); }
+  .bpm-filter-sep {
+    font-size: 10px;
+    color: var(--muted);
+  }
   #beats-container { display: flex; flex-direction: column; gap: 0; }
   .beat-block {
     background: var(--surface);
@@ -180,13 +222,12 @@
   /* ── Grid ── */
   .grid-wrapper {
     overflow-x: auto;
-    scrollbar-width: thin;
-    scrollbar-color: #333 transparent;
+    overflow-y: hidden;
+    scrollbar-width: none;
     margin-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
   }
-  .grid-wrapper::-webkit-scrollbar { height: 4px; }
-  .grid-wrapper::-webkit-scrollbar-track { background: transparent; }
-  .grid-wrapper::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+  .grid-wrapper::-webkit-scrollbar { display: none; }
   .grid {
     --cell: calc((100vw - var(--outer-pad) - var(--label-w) - 33 * var(--gap)) / 32);
     display: grid;
@@ -403,11 +444,19 @@
 
 <h1 class="page-title">BEAT SEQUENCER</h1>
 
-<div class="toolbar" style="grid-template-columns: repeat(4, 1fr);">
+<div class="toolbar">
   <button class="btn-add" onclick="addBeat()">Beat</button>
   <button class="btn-save" onclick="saveToJSON()">Save</button>
   <button class="btn-load" onclick="loadFromJSON()">Load</button>
+</div>
+<div class="toolbar-filters">
   <button class="btn-sort" id="btn-sort" onclick="cycleSortBeats()">Trier</button>
+  <div class="bpm-filter">
+    <span class="bpm-filter-label">BPM</span>
+    <input type="number" id="bpm-min" min="20" max="300" placeholder="—" oninput="applyBpmFilter()">
+    <span class="bpm-filter-sep">→</span>
+    <input type="number" id="bpm-max" min="20" max="300" placeholder="—" oninput="applyBpmFilter()">
+  </div>
 </div>
 <div id="beats-container"></div>
 <div id="empty-state">
@@ -418,8 +467,8 @@
 <div class="toast" id="toast"></div>
 
 <script>
-  const DEFAULT_TRACKS = ['Perc','Open HH','Closed HH','Alt Snare','Snare','Alt Kick','Kick'];
-  const DEFAULT_COLORS = ['#9c7fe8','#4fc3f7','#e8b84b','#b0b0b0','#d4830f','#888888','#e0e0e0'];
+  const DEFAULT_TRACKS = ['HH','SNARE','KICK'];
+  const DEFAULT_COLORS = ['#9c7fe8','#4fc3f7','#e8b84b'];
   const STEPS = 32;
   const STORAGE_KEY = 'beat_sequencer_v4';
 
@@ -514,7 +563,7 @@
     beatCounter++;
     const tracks = [...DEFAULT_TRACKS];
     const colors = [...DEFAULT_COLORS];
-    beats.push({
+    beats.unshift({
       id: uid(), name: 'Beat ' + beatCounter, bpm: 80,
       accent: randomAccent(),
       tracks, colors, pattern: emptyPattern(tracks.length), editing: true
@@ -607,9 +656,9 @@
   function addTrack(id) {
     const b = beats.find(b => b.id === id);
     if (!b) return;
-    b.tracks.push('New');
-    b.colors.push('#' + Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, '0').slice(0, 6));
-    b.pattern.push(new Array(STEPS).fill(false));
+    b.tracks.unshift('New');
+    b.colors.unshift('#' + Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, '0').slice(0, 6));
+    b.pattern.unshift(new Array(STEPS).fill(false));
     rebuildGrid(id);
     saveToStorage();
   }
@@ -684,13 +733,30 @@
     saveToStorage();
   }
 
+  /* ── BPM Filter ── */
+  function applyBpmFilter() { renderAll(); }
+
+  function getFilteredBeats() {
+    const minEl = document.getElementById('bpm-min');
+    const maxEl = document.getElementById('bpm-max');
+    const min = minEl && minEl.value !== '' ? parseInt(minEl.value) : null;
+    const max = maxEl && maxEl.value !== '' ? parseInt(maxEl.value) : null;
+    return beats.filter(b => {
+      const bpm = b.bpm || 80;
+      if (min !== null && bpm < min) return false;
+      if (max !== null && bpm > max) return false;
+      return true;
+    });
+  }
+
   function renderAll() {
     const container = document.getElementById('beats-container');
     const empty = document.getElementById('empty-state');
     container.innerHTML = '';
-    if (beats.length === 0) { empty.style.display = 'block'; return; }
+    const filtered = getFilteredBeats();
+    if (filtered.length === 0) { empty.style.display = 'block'; return; }
     empty.style.display = 'none';
-    beats.forEach(b => container.appendChild(buildBeatBlock(b)));
+    filtered.forEach(b => container.appendChild(buildBeatBlock(b)));
   }
 
   function buildBeatBlock(beat) {
