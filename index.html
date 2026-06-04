@@ -559,23 +559,11 @@
     const blob = new Blob([json], { type: 'application/json' });
     const file = new File([blob], 'beats.json', { type: 'application/json' });
 
-    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file], title: 'beats.json' });
-        return;
-      } catch(e) {
-        if (e.name === 'AbortError') return; // user cancelled
-      }
+    try {
+      await navigator.share({ files: [file], title: 'beats.json' });
+    } catch(e) {
+      if (e.name !== 'AbortError') showToast('Partage non supporté');
     }
-    // fallback: direct download
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'beats.json';
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
-    showToast('Export en cours…');
   }
 
   function loadFromJSON() {
