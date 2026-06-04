@@ -541,7 +541,7 @@
   }
 
   /* ── Export ── */
-  function saveToJSON() {
+  async function saveToJSON() {
     if (beats.length === 0) { showToast('Aucun beat à exporter !'); return; }
     const data = {
       version: 3,
@@ -555,7 +555,19 @@
         }))
       }))
     };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const file = new File([blob], 'beats.json', { type: 'application/json' });
+
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: 'beats.json' });
+        return;
+      } catch(e) {
+        if (e.name === 'AbortError') return; // user cancelled
+      }
+    }
+    // fallback: direct download
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
