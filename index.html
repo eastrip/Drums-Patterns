@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Beat Sequencer</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Bebas+Neue&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
 <style>
   :root {
     --bg: #0e0e0e;
@@ -148,6 +149,10 @@
   .beat-block.locked .row-label-input { pointer-events: none; }
   .beat-block.locked .btn-del-track { opacity: 0; pointer-events: none; }
   .beat-block.locked .color-swatch { pointer-events: none; }
+
+  .btn-icon.btn-play { border-color: var(--beat-color, var(--border)); color: var(--beat-color, var(--muted)); }
+  .btn-icon.btn-play:hover { background: rgba(255,255,255,0.05); }
+  .btn-icon.btn-play.playing { background: var(--beat-color, var(--accent)); color: #000; border-color: var(--beat-color, var(--accent)); }
 
   /* ── Beat header ── */
   .beat-header {
@@ -330,6 +335,8 @@
   .cell.grp-a { background: var(--cell-a); }
   .cell.grp-b { background: var(--cell-b); }
   .beat-block:not(.locked) .cell:hover { filter: brightness(1.7); transform: scale(1.05); }
+
+  .cell.playing-step { outline: 2px solid rgba(255,255,255,0.6); outline-offset: -1px; }
 
   /* ── Add track ── */
   .add-track-row { display: flex; align-items: center; margin-top: 0; }
@@ -789,7 +796,13 @@
     btnDel.innerHTML = SVG_CROSS;
     btnDel.title = 'Supprimer ce beat';
     btnDel.onclick = () => deleteBeat(beat.id);
-    hdr.append(nameInput, btnEdit, btnClear, btnDel);
+    const btnPlay = document.createElement('button');
+    btnPlay.className = 'btn-icon btn-play';
+    btnPlay.dataset.beatId = beat.id;
+    btnPlay.innerHTML = SVG_PLAY;
+    btnPlay.title = 'Jouer';
+    btnPlay.onclick = () => togglePlay(beat.id);
+    hdr.append(nameInput, btnPlay, btnEdit, btnClear, btnDel);
     block.appendChild(hdr);
 
     const meta = document.createElement('div');
@@ -986,6 +999,129 @@
   }
 
   function uid() { return String(Date.now()) + String(Math.random()).slice(2); }
+
+  const SVG_PLAY = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>';
+  const SVG_STOP = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16"/></svg>';
+
+  /* ── Audio engine ── */
+  const SAMPLE_BASE = 'https://tonejs.github.io/audio/drum-samples/';
+  const SAMPLE_MAP = {
+    'kick':       SAMPLE_BASE + 'Kick.mp3',
+    'bd':         SAMPLE_BASE + 'Kick.mp3',
+    'k':          SAMPLE_BASE + 'Kick.mp3',
+    'snare':      SAMPLE_BASE + 'Snare.mp3',
+    'sn':         SAMPLE_BASE + 'Snare.mp3',
+    'sd':         SAMPLE_BASE + 'Snare.mp3',
+    'hh':         SAMPLE_BASE + 'hihat.mp3',
+    'hihat':      SAMPLE_BASE + 'hihat.mp3',
+    'closed hh':  SAMPLE_BASE + 'hihat.mp3',
+    'open hh':    SAMPLE_BASE + 'openhat.mp3',
+    'oh':         SAMPLE_BASE + 'openhat.mp3',
+    'clap':       SAMPLE_BASE + 'Clap.mp3',
+    'cp':         SAMPLE_BASE + 'Clap.mp3',
+    'tom':        SAMPLE_BASE + 'Tom.mp3',
+    'alt kick':   SAMPLE_BASE + 'Kick2.mp3',
+    'alt snare':  SAMPLE_BASE + 'Snare2.mp3',
+    'perc':       SAMPLE_BASE + 'shaker.mp3',
+    'rim':        SAMPLE_BASE + 'Rim.mp3',
+  };
+
+  var activePlayers = {}; // beatId -> { loop, players }
+
+  function getSampleUrl(trackName) {
+    const key = trackName.toLowerCase().trim();
+    return SAMPLE_MAP[key] || SAMPLE_BASE + 'Kick.mp3';
+  }
+
+  async function togglePlay(id) {
+    await Tone.start();
+    if (activePlayers[id]) {
+      stopBeat(id);
+    } else {
+      await startBeat(id);
+    }
+  }
+
+  async function startBeat(id) {
+    const b = beats.find(b => b.id === id);
+    if (!b) return;
+
+    // Stop any other playing beat
+    Object.keys(activePlayers).forEach(pid => stopBeat(pid));
+
+    const bpm = b.bpm || 80;
+    Tone.getTransport().bpm.value = bpm;
+
+    // Load all players
+    const players = {};
+    const loadPromises = b.tracks.map((track, ti) => {
+      return new Promise(resolve => {
+        const url = getSampleUrl(track);
+        const player = new Tone.Player({ url, onload: resolve, onerror: resolve }).toDestination();
+        players[ti] = player;
+      });
+    });
+
+    await Promise.all(loadPromises);
+
+    let step = 0;
+    const loop = new Tone.Sequence((time) => {
+      b.tracks.forEach((track, ti) => {
+        if (b.pattern[ti] && b.pattern[ti][step]) {
+          if (players[ti] && players[ti].loaded) {
+            players[ti].start(time);
+          }
+        }
+      });
+      // Highlight active column
+      const s = step;
+      Tone.getDraw().schedule(() => {
+        highlightStep(id, s);
+      }, time);
+      step = (step + 1) % STEPS;
+    }, null, '16n');
+
+    loop.start(0);
+    Tone.getTransport().start();
+
+    activePlayers[id] = { loop, players };
+
+    // Update button
+    updatePlayBtn(id, true);
+  }
+
+  function stopBeat(id) {
+    const ap = activePlayers[id];
+    if (!ap) return;
+    ap.loop.stop();
+    ap.loop.dispose();
+    Object.values(ap.players).forEach(p => p.dispose());
+    delete activePlayers[id];
+    Tone.getTransport().stop();
+    clearHighlight(id);
+    updatePlayBtn(id, false);
+  }
+
+  function updatePlayBtn(id, playing) {
+    const btn = document.querySelector('.btn-play[data-beat-id="' + id + '"]');
+    if (!btn) return;
+    btn.innerHTML = playing ? SVG_STOP : SVG_PLAY;
+    btn.title = playing ? 'Stop' : 'Jouer';
+    btn.classList.toggle('playing', playing);
+  }
+
+  function highlightStep(id, step) {
+    const block = document.querySelector('.beat-block[data-id="' + id + '"]');
+    if (!block) return;
+    block.querySelectorAll('.cell').forEach(c => c.classList.remove('playing-step'));
+    block.querySelectorAll('[data-step="' + step + '"]').forEach(c => c.classList.add('playing-step'));
+  }
+
+  function clearHighlight(id) {
+    const block = document.querySelector('.beat-block[data-id="' + id + '"]');
+    if (!block) return;
+    block.querySelectorAll('.cell').forEach(c => c.classList.remove('playing-step'));
+  }
 
   loadFromStorage();
 </script>
