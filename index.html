@@ -149,10 +149,6 @@
   .beat-block.locked .btn-del-track { opacity: 0; pointer-events: none; }
   .beat-block.locked .color-swatch { pointer-events: none; }
 
-  .btn-icon.btn-play { border-color: var(--beat-color, var(--border)); color: var(--beat-color, var(--muted)); }
-  .btn-icon.btn-play:hover { background: rgba(255,255,255,0.05); }
-  .btn-icon.btn-play.playing { background: var(--beat-color, var(--accent)); color: #000; border-color: var(--beat-color, var(--accent)); }
-
   /* ── Beat header ── */
   .beat-header {
     display: flex;
@@ -334,8 +330,6 @@
   .cell.grp-a { background: var(--cell-a); }
   .cell.grp-b { background: var(--cell-b); }
   .beat-block:not(.locked) .cell:hover { filter: brightness(1.7); transform: scale(1.05); }
-
-  .cell.playing-step { outline: 2px solid rgba(255,255,255,0.6); outline-offset: -1px; }
 
   /* ── Add track ── */
   .add-track-row { display: flex; align-items: center; margin-top: 0; }
@@ -795,13 +789,7 @@
     btnDel.innerHTML = SVG_CROSS;
     btnDel.title = 'Supprimer ce beat';
     btnDel.onclick = () => deleteBeat(beat.id);
-    const btnPlay = document.createElement('button');
-    btnPlay.className = 'btn-icon btn-play';
-    btnPlay.dataset.beatId = beat.id;
-    btnPlay.innerHTML = SVG_PLAY;
-    btnPlay.title = 'Jouer';
-    btnPlay.onclick = () => togglePlay(beat.id);
-    hdr.append(nameInput, btnPlay, btnEdit, btnClear, btnDel);
+    hdr.append(nameInput, btnEdit, btnClear, btnDel);
     block.appendChild(hdr);
 
     const meta = document.createElement('div');
@@ -998,156 +986,6 @@
   }
 
   function uid() { return String(Date.now()) + String(Math.random()).slice(2); }
-
-  const SVG_PLAY = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>';
-  const SVG_STOP = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16"/></svg>';
-
-  /* ── Audio engine ── */
-  /* ── Audio engine (Web Audio API natif) ── */
-  var audioCtx = null;
-  var activePlayers = {};
-  var timerIds = {};
-
-  function initAudio() {
-    if (!audioCtx) {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    }
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-    // Play a silent buffer to unlock audio on iOS
-    const buf = audioCtx.createBuffer(1, 1, 22050);
-    const src = audioCtx.createBufferSource();
-    src.buffer = buf;
-    src.connect(audioCtx.destination);
-    src.start(0);
-    return audioCtx;
-  }
-
-  function playKick(ctx, when) {
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.connect(g); g.connect(ctx.destination);
-    o.frequency.setValueAtTime(150, when);
-    o.frequency.exponentialRampToValueAtTime(0.01, when + 0.35);
-    g.gain.setValueAtTime(1.0, when);
-    g.gain.exponentialRampToValueAtTime(0.01, when + 0.35);
-    o.start(when); o.stop(when + 0.35);
-  }
-
-  function playSnare(ctx, when) {
-    const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.2), ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    const g = ctx.createGain();
-    src.connect(g); g.connect(ctx.destination);
-    g.gain.setValueAtTime(0.9, when);
-    g.gain.exponentialRampToValueAtTime(0.01, when + 0.2);
-    src.start(when); src.stop(when + 0.2);
-  }
-
-  function playHH(ctx, when, open) {
-    const dur = open ? 0.25 : 0.05;
-    const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * dur), ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    const hpf = ctx.createBiquadFilter();
-    hpf.type = 'highpass'; hpf.frequency.value = 8000;
-    const g = ctx.createGain();
-    src.connect(hpf); hpf.connect(g); g.connect(ctx.destination);
-    g.gain.setValueAtTime(0.6, when);
-    g.gain.exponentialRampToValueAtTime(0.01, when + dur);
-    src.start(when); src.stop(when + dur);
-  }
-
-  function playPerc(ctx, when) {
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.connect(g); g.connect(ctx.destination);
-    o.frequency.setValueAtTime(250, when);
-    o.frequency.exponentialRampToValueAtTime(0.01, when + 0.12);
-    g.gain.setValueAtTime(0.7, when);
-    g.gain.exponentialRampToValueAtTime(0.01, when + 0.12);
-    o.start(when); o.stop(when + 0.12);
-  }
-
-  function triggerSound(ctx, trackName, when) {
-    try {
-      const k = trackName.toLowerCase().trim();
-      if (k.includes('kick') || k === 'bd' || k === 'k' || k.includes('alt kick')) playKick(ctx, when);
-      else if (k.includes('snare') || k.includes('clap') || k === 'sn' || k.includes('alt snare')) playSnare(ctx, when);
-      else if (k.includes('open')) playHH(ctx, when, true);
-      else if (k.includes('hh') || k.includes('hihat') || k.includes('hat')) playHH(ctx, when, false);
-      else playPerc(ctx, when);
-    } catch(e) {}
-  }
-
-  function togglePlay(id) {
-    // initAudio MUST be called synchronously in user gesture
-    const ctx = initAudio();
-    if (activePlayers[id]) { stopBeat(id); return; }
-    startBeat(id, ctx);
-  }
-
-  function startBeat(id, ctx) {
-    const b = beats.find(b => b.id === id);
-    if (!b) return;
-    Object.keys(activePlayers).forEach(pid => stopBeat(pid));
-
-    const bpm = b.bpm || 80;
-    const stepDur = 60 / bpm / 4; // 16th note in seconds
-    let step = 0;
-    let alive = true;
-    activePlayers[id] = { alive: true };
-    updatePlayBtn(id, true);
-
-    function tick() {
-      if (!activePlayers[id] || !activePlayers[id].alive) return;
-      const now = ctx.currentTime;
-      // Schedule 1 step ahead for accuracy
-      b.tracks.forEach((track, ti) => {
-        if (b.pattern[ti] && b.pattern[ti][step]) {
-          triggerSound(ctx, track, now + 0.01);
-        }
-      });
-      highlightStep(id, step);
-      step = (step + 1) % STEPS;
-      timerIds[id] = setTimeout(tick, stepDur * 1000);
-    }
-
-    tick();
-  }
-
-  function stopBeat(id) {
-    if (activePlayers[id]) activePlayers[id].alive = false;
-    if (timerIds[id]) { clearTimeout(timerIds[id]); delete timerIds[id]; }
-    delete activePlayers[id];
-    clearHighlight(id);
-    updatePlayBtn(id, false);
-  }
-
-  function updatePlayBtn(id, playing) {
-    const btn = document.querySelector('.btn-play[data-beat-id="' + id + '"]');
-    if (!btn) return;
-    btn.innerHTML = playing ? SVG_STOP : SVG_PLAY;
-    btn.title = playing ? 'Stop' : 'Jouer';
-    btn.classList.toggle('playing', playing);
-  }
-
-  function highlightStep(id, step) {
-    const block = document.querySelector('.beat-block[data-id="' + id + '"]');
-    if (!block) return;
-    block.querySelectorAll('.cell').forEach(c => c.classList.remove('playing-step'));
-    block.querySelectorAll('[data-step="' + step + '"]').forEach(c => c.classList.add('playing-step'));
-  }
-
-  function clearHighlight(id) {
-    const block = document.querySelector('.beat-block[data-id="' + id + '"]');
-    if (!block) return;
-    block.querySelectorAll('.cell').forEach(c => c.classList.remove('playing-step'));
-  }
 
   loadFromStorage();
 </script>
