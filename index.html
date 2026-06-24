@@ -1004,34 +1004,40 @@
   const SVG_STOP = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16"/></svg>';
 
   /* ── Audio engine ── */
-  const SAMPLE_BASE = 'https://tonejs.github.io/audio/drum-samples/acoustic-kit/';
-  const SAMPLE_MAP = {
-    'kick':       SAMPLE_BASE + 'kick.mp3',
-    'bd':         SAMPLE_BASE + 'kick.mp3',
-    'k':          SAMPLE_BASE + 'kick.mp3',
-    'snare':      SAMPLE_BASE + 'snare.mp3',
-    'sn':         SAMPLE_BASE + 'snare.mp3',
-    'sd':         SAMPLE_BASE + 'snare.mp3',
-    'hh':         SAMPLE_BASE + 'hihat.mp3',
-    'hihat':      SAMPLE_BASE + 'hihat.mp3',
-    'closed hh':  SAMPLE_BASE + 'hihat.mp3',
-    'open hh':    SAMPLE_BASE + 'hihat.mp3',
-    'oh':         SAMPLE_BASE + 'hihat.mp3',
-    'clap':       SAMPLE_BASE + 'snare.mp3',
-    'cp':         SAMPLE_BASE + 'snare.mp3',
-    'tom':        SAMPLE_BASE + 'kick.mp3',
-    'alt kick':   SAMPLE_BASE + 'kick.mp3',
-    'alt snare':  SAMPLE_BASE + 'snare.mp3',
-    'perc':       SAMPLE_BASE + 'hihat.mp3',
-    'rim':        SAMPLE_BASE + 'snare.mp3',
-    'new':        SAMPLE_BASE + 'kick.mp3',
-  };
+  var activePlayers = {};
 
-  var activePlayers = {}; // beatId -> { loop, players }
-
-  function getSampleUrl(trackName) {
+  function getSynthForTrack(trackName) {
     const key = trackName.toLowerCase().trim();
-    return SAMPLE_MAP[key] || SAMPLE_BASE + 'Kick.mp3';
+    if (key.includes('kick') || key === 'bd' || key === 'k') {
+      return new Tone.MembraneSynth({
+        pitchDecay: 0.05, octaves: 5,
+        envelope: { attack: 0.001, decay: 0.2, sustain: 0, release: 0.1 }
+      }).toDestination();
+    } else if (key.includes('snare') || key.includes('clap') || key === 'sn' || key === 'sd') {
+      return new Tone.NoiseSynth({
+        noise: { type: 'white' },
+        envelope: { attack: 0.001, decay: 0.13, sustain: 0, release: 0.01 }
+      }).toDestination();
+    } else if (key.includes('open')) {
+      const m = new Tone.MetalSynth({
+        frequency: 400, envelope: { attack: 0.001, decay: 0.4, release: 0.01 },
+        harmonicity: 5.1, modulationIndex: 32, resonance: 4000, octaves: 1.5
+      }).toDestination();
+      m.volume.value = -8;
+      return m;
+    } else if (key.includes('hh') || key.includes('hihat') || key.includes('hat')) {
+      const m = new Tone.MetalSynth({
+        frequency: 400, envelope: { attack: 0.001, decay: 0.08, release: 0.01 },
+        harmonicity: 5.1, modulationIndex: 32, resonance: 4000, octaves: 1.5
+      }).toDestination();
+      m.volume.value = -8;
+      return m;
+    } else {
+      return new Tone.MembraneSynth({
+        pitchDecay: 0.08, octaves: 3,
+        envelope: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.1 }
+      }).toDestination();
+    }
   }
 
   async function togglePlay(id) {
@@ -1039,36 +1045,28 @@
     if (activePlayers[id]) {
       stopBeat(id);
     } else {
-      await startBeat(id);
+      startBeat(id);
     }
   }
 
-  async function startBeat(id) {
+  function startBeat(id) {
     const b = beats.find(b => b.id === id);
     if (!b) return;
 
     Object.keys(activePlayers).forEach(pid => stopBeat(pid));
-    Tone.getTransport().stop();
-    Tone.getTransport().cancel();
     Tone.getTransport().bpm.value = b.bpm || 80;
 
-    // Build url map
-    const urlMap = {};
-    b.tracks.forEach((track, ti) => {
-      urlMap[String(ti)] = getSampleUrl(track);
-    });
-
-    // Load all samples via Tone.Players
-    const players = await new Promise(resolve => {
-      const p = new Tone.Players(urlMap, () => resolve(p)).toDestination();
-    });
+    const synths = b.tracks.map(track => getSynthForTrack(track));
 
     let step = 0;
     const loop = new Tone.Sequence((time) => {
       const currentStep = step;
       b.tracks.forEach((track, ti) => {
         if (b.pattern[ti] && b.pattern[ti][currentStep]) {
-          try { players.player(String(ti)).start(time); } catch(e) {}
+          const s = synths[ti];
+          if (s instanceof Tone.MembraneSynth) s.triggerAttackRelease('C1', '8n', time);
+          else if (s instanceof Tone.NoiseSynth) s.triggerAttackRelease('16n', time);
+          else if (s instanceof Tone.MetalSynth) s.triggerAttackRelease('16n', time);
         }
       });
       setTimeout(() => highlightStep(id, currentStep), 0);
@@ -1077,8 +1075,7 @@
 
     loop.start(0);
     Tone.getTransport().start();
-
-    activePlayers[id] = { loop, players };
+    activePlayers[id] = { loop, synths };
     updatePlayBtn(id, true);
   }
 
@@ -1087,7 +1084,7 @@
     if (!ap) return;
     ap.loop.stop();
     ap.loop.dispose();
-    try { ap.players.dispose(); } catch(e) {}
+    ap.synths.forEach(s => { try { s.dispose(); } catch(e) {} });
     delete activePlayers[id];
     Tone.getTransport().stop();
     Tone.getTransport().cancel();
