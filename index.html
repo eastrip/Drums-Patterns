@@ -1048,33 +1048,27 @@
     if (!b) return;
 
     Object.keys(activePlayers).forEach(pid => stopBeat(pid));
-
+    Tone.getTransport().stop();
+    Tone.getTransport().cancel();
     Tone.getTransport().bpm.value = b.bpm || 80;
 
-    // Pre-load all players
-    const players = {};
-    const loadPromises = b.tracks.map((track, ti) => {
-      return new Promise(resolve => {
-        const url = getSampleUrl(track);
-        const player = new Tone.Player(url).toDestination();
-        player.buffer.onload = resolve;
-        player.buffer.onerror = resolve;
-        players[ti] = player;
-        // Force load
-        setTimeout(resolve, 3000); // max wait 3s
-      });
+    // Build url map
+    const urlMap = {};
+    b.tracks.forEach((track, ti) => {
+      urlMap[String(ti)] = getSampleUrl(track);
     });
 
-    // Wait for audio context then load
-    await Tone.loaded().catch(() => {});
+    // Load all samples via Tone.Players
+    const players = await new Promise(resolve => {
+      const p = new Tone.Players(urlMap, () => resolve(p)).toDestination();
+    });
 
     let step = 0;
     const loop = new Tone.Sequence((time) => {
       const currentStep = step;
       b.tracks.forEach((track, ti) => {
         if (b.pattern[ti] && b.pattern[ti][currentStep]) {
-          const p = players[ti];
-          if (p && p.loaded) p.start(time);
+          try { players.player(String(ti)).start(time); } catch(e) {}
         }
       });
       setTimeout(() => highlightStep(id, currentStep), 0);
@@ -1093,9 +1087,10 @@
     if (!ap) return;
     ap.loop.stop();
     ap.loop.dispose();
-    Object.values(ap.players).forEach(p => p.dispose());
+    try { ap.players.dispose(); } catch(e) {}
     delete activePlayers[id];
     Tone.getTransport().stop();
+    Tone.getTransport().cancel();
     clearHighlight(id);
     updatePlayBtn(id, false);
   }
