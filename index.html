@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Beat Sequencer</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Bebas+Neue&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
 <style>
   :root {
     --bg: #0e0e0e;
@@ -1004,90 +1003,118 @@
   const SVG_STOP = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16"/></svg>';
 
   /* ── Audio engine ── */
+  /* ── Audio engine (Web Audio API natif) ── */
+  var audioCtx = null;
   var activePlayers = {};
+  var timerIds = {};
 
-  function getSynthForTrack(trackName) {
-    const key = trackName.toLowerCase().trim();
-    if (key.includes('kick') || key === 'bd' || key === 'k') {
-      return new Tone.MembraneSynth({
-        pitchDecay: 0.05, octaves: 5,
-        envelope: { attack: 0.001, decay: 0.2, sustain: 0, release: 0.1 }
-      }).toDestination();
-    } else if (key.includes('snare') || key.includes('clap') || key === 'sn' || key === 'sd') {
-      return new Tone.NoiseSynth({
-        noise: { type: 'white' },
-        envelope: { attack: 0.001, decay: 0.13, sustain: 0, release: 0.01 }
-      }).toDestination();
-    } else if (key.includes('open')) {
-      const m = new Tone.MetalSynth({
-        frequency: 400, envelope: { attack: 0.001, decay: 0.4, release: 0.01 },
-        harmonicity: 5.1, modulationIndex: 32, resonance: 4000, octaves: 1.5
-      }).toDestination();
-      m.volume.value = -8;
-      return m;
-    } else if (key.includes('hh') || key.includes('hihat') || key.includes('hat')) {
-      const m = new Tone.MetalSynth({
-        frequency: 400, envelope: { attack: 0.001, decay: 0.08, release: 0.01 },
-        harmonicity: 5.1, modulationIndex: 32, resonance: 4000, octaves: 1.5
-      }).toDestination();
-      m.volume.value = -8;
-      return m;
-    } else {
-      return new Tone.MembraneSynth({
-        pitchDecay: 0.08, octaves: 3,
-        envelope: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.1 }
-      }).toDestination();
-    }
+  function getAudioCtx() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
   }
 
-  async function togglePlay(id) {
-    await Tone.start();
-    if (activePlayers[id]) {
-      stopBeat(id);
-    } else {
-      startBeat(id);
-    }
+  function playKick(ctx, time) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.setValueAtTime(150, time);
+    osc.frequency.exponentialRampToValueAtTime(0.001, time + 0.3);
+    gain.gain.setValueAtTime(1, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
+    osc.start(time); osc.stop(time + 0.3);
   }
 
-  function startBeat(id) {
+  function playSnare(ctx, time) {
+    const noise = ctx.createBufferSource();
+    const buf = ctx.createBuffer(1, ctx.sampleRate * 0.15, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    noise.buffer = buf;
+    const gain = ctx.createGain();
+    noise.connect(gain); gain.connect(ctx.destination);
+    gain.gain.setValueAtTime(0.8, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
+    noise.start(time); noise.stop(time + 0.15);
+  }
+
+  function playHH(ctx, time, open) {
+    const dur = open ? 0.3 : 0.06;
+    const noise = ctx.createBufferSource();
+    const buf = ctx.createBuffer(1, ctx.sampleRate * dur, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    noise.buffer = buf;
+    const hpf = ctx.createBiquadFilter();
+    hpf.type = 'highpass'; hpf.frequency.value = 7000;
+    const gain = ctx.createGain();
+    noise.connect(hpf); hpf.connect(gain); gain.connect(ctx.destination);
+    gain.gain.setValueAtTime(0.5, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + dur);
+    noise.start(time); noise.stop(time + dur);
+  }
+
+  function playPerc(ctx, time) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.setValueAtTime(300, time);
+    osc.frequency.exponentialRampToValueAtTime(0.001, time + 0.1);
+    gain.gain.setValueAtTime(0.6, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
+    osc.start(time); osc.stop(time + 0.1);
+  }
+
+  function triggerSound(ctx, trackName, time) {
+    const k = trackName.toLowerCase().trim();
+    if (k.includes('kick') || k === 'bd' || k === 'k' || k.includes('alt kick')) playKick(ctx, time);
+    else if (k.includes('snare') || k.includes('clap') || k === 'sn' || k.includes('alt snare')) playSnare(ctx, time);
+    else if (k.includes('open')) playHH(ctx, time, true);
+    else if (k.includes('hh') || k.includes('hihat') || k.includes('hat')) playHH(ctx, time, false);
+    else playPerc(ctx, time);
+  }
+
+  function togglePlay(id) {
+    if (activePlayers[id]) { stopBeat(id); return; }
+    const ctx = getAudioCtx();
+    startBeat(id, ctx);
+  }
+
+  function startBeat(id, ctx) {
     const b = beats.find(b => b.id === id);
     if (!b) return;
-
     Object.keys(activePlayers).forEach(pid => stopBeat(pid));
-    Tone.getTransport().bpm.value = b.bpm || 80;
 
-    const synths = b.tracks.map(track => getSynthForTrack(track));
-
+    const bpm = b.bpm || 80;
+    const stepDur = 60 / bpm / 4; // 16th note duration in seconds
     let step = 0;
-    const loop = new Tone.Sequence((time) => {
-      const currentStep = step;
-      b.tracks.forEach((track, ti) => {
-        if (b.pattern[ti] && b.pattern[ti][currentStep]) {
-          const s = synths[ti];
-          if (s instanceof Tone.MembraneSynth) s.triggerAttackRelease('C1', '8n', time);
-          else if (s instanceof Tone.NoiseSynth) s.triggerAttackRelease('16n', time);
-          else if (s instanceof Tone.MetalSynth) s.triggerAttackRelease('16n', time);
-        }
-      });
-      setTimeout(() => highlightStep(id, currentStep), 0);
-      step = (step + 1) % STEPS;
-    }, [...Array(STEPS).keys()], '16n');
+    let running = true;
 
-    loop.start(0);
-    Tone.getTransport().start();
-    activePlayers[id] = { loop, synths };
+    function tick() {
+      if (!running) return;
+      const now = ctx.currentTime;
+      // Schedule next 2 steps ahead
+      for (let i = 0; i < 2; i++) {
+        const s = (step + i) % STEPS;
+        const t = now + i * stepDur;
+        b.tracks.forEach((track, ti) => {
+          if (b.pattern[ti] && b.pattern[ti][s]) triggerSound(ctx, track, t);
+        });
+      }
+      highlightStep(id, step);
+      step = (step + 1) % STEPS;
+      timerIds[id] = setTimeout(tick, stepDur * 1000 * 0.9);
+    }
+
+    tick();
+    activePlayers[id] = { running: true };
     updatePlayBtn(id, true);
   }
 
   function stopBeat(id) {
-    const ap = activePlayers[id];
-    if (!ap) return;
-    ap.loop.stop();
-    ap.loop.dispose();
-    ap.synths.forEach(s => { try { s.dispose(); } catch(e) {} });
+    if (activePlayers[id]) activePlayers[id].running = false;
+    if (timerIds[id]) { clearTimeout(timerIds[id]); delete timerIds[id]; }
     delete activePlayers[id];
-    Tone.getTransport().stop();
-    Tone.getTransport().cancel();
     clearHighlight(id);
     updatePlayBtn(id, false);
   }
