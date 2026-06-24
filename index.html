@@ -1004,26 +1004,27 @@
   const SVG_STOP = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16"/></svg>';
 
   /* ── Audio engine ── */
-  const SAMPLE_BASE = 'https://tonejs.github.io/audio/drum-samples/';
+  const SAMPLE_BASE = 'https://tonejs.github.io/audio/drum-samples/acoustic-kit/';
   const SAMPLE_MAP = {
-    'kick':       SAMPLE_BASE + 'Kick.mp3',
-    'bd':         SAMPLE_BASE + 'Kick.mp3',
-    'k':          SAMPLE_BASE + 'Kick.mp3',
-    'snare':      SAMPLE_BASE + 'Snare.mp3',
-    'sn':         SAMPLE_BASE + 'Snare.mp3',
-    'sd':         SAMPLE_BASE + 'Snare.mp3',
+    'kick':       SAMPLE_BASE + 'kick.mp3',
+    'bd':         SAMPLE_BASE + 'kick.mp3',
+    'k':          SAMPLE_BASE + 'kick.mp3',
+    'snare':      SAMPLE_BASE + 'snare.mp3',
+    'sn':         SAMPLE_BASE + 'snare.mp3',
+    'sd':         SAMPLE_BASE + 'snare.mp3',
     'hh':         SAMPLE_BASE + 'hihat.mp3',
     'hihat':      SAMPLE_BASE + 'hihat.mp3',
     'closed hh':  SAMPLE_BASE + 'hihat.mp3',
-    'open hh':    SAMPLE_BASE + 'openhat.mp3',
-    'oh':         SAMPLE_BASE + 'openhat.mp3',
-    'clap':       SAMPLE_BASE + 'Clap.mp3',
-    'cp':         SAMPLE_BASE + 'Clap.mp3',
-    'tom':        SAMPLE_BASE + 'Tom.mp3',
-    'alt kick':   SAMPLE_BASE + 'Kick2.mp3',
-    'alt snare':  SAMPLE_BASE + 'Snare2.mp3',
-    'perc':       SAMPLE_BASE + 'shaker.mp3',
-    'rim':        SAMPLE_BASE + 'Rim.mp3',
+    'open hh':    SAMPLE_BASE + 'hihat.mp3',
+    'oh':         SAMPLE_BASE + 'hihat.mp3',
+    'clap':       SAMPLE_BASE + 'snare.mp3',
+    'cp':         SAMPLE_BASE + 'snare.mp3',
+    'tom':        SAMPLE_BASE + 'kick.mp3',
+    'alt kick':   SAMPLE_BASE + 'kick.mp3',
+    'alt snare':  SAMPLE_BASE + 'snare.mp3',
+    'perc':       SAMPLE_BASE + 'hihat.mp3',
+    'rim':        SAMPLE_BASE + 'snare.mp3',
+    'new':        SAMPLE_BASE + 'kick.mp3',
   };
 
   var activePlayers = {}; // beatId -> { loop, players }
@@ -1046,47 +1047,44 @@
     const b = beats.find(b => b.id === id);
     if (!b) return;
 
-    // Stop any other playing beat
     Object.keys(activePlayers).forEach(pid => stopBeat(pid));
 
-    const bpm = b.bpm || 80;
-    Tone.getTransport().bpm.value = bpm;
+    Tone.getTransport().bpm.value = b.bpm || 80;
 
-    // Load all players
+    // Pre-load all players
     const players = {};
     const loadPromises = b.tracks.map((track, ti) => {
       return new Promise(resolve => {
         const url = getSampleUrl(track);
-        const player = new Tone.Player({ url, onload: resolve, onerror: resolve }).toDestination();
+        const player = new Tone.Player(url).toDestination();
+        player.buffer.onload = resolve;
+        player.buffer.onerror = resolve;
         players[ti] = player;
+        // Force load
+        setTimeout(resolve, 3000); // max wait 3s
       });
     });
 
-    await Promise.all(loadPromises);
+    // Wait for audio context then load
+    await Tone.loaded().catch(() => {});
 
     let step = 0;
     const loop = new Tone.Sequence((time) => {
+      const currentStep = step;
       b.tracks.forEach((track, ti) => {
-        if (b.pattern[ti] && b.pattern[ti][step]) {
-          if (players[ti] && players[ti].loaded) {
-            players[ti].start(time);
-          }
+        if (b.pattern[ti] && b.pattern[ti][currentStep]) {
+          const p = players[ti];
+          if (p && p.loaded) p.start(time);
         }
       });
-      // Highlight active column
-      const s = step;
-      Tone.getDraw().schedule(() => {
-        highlightStep(id, s);
-      }, time);
+      setTimeout(() => highlightStep(id, currentStep), 0);
       step = (step + 1) % STEPS;
-    }, null, '16n');
+    }, [...Array(STEPS).keys()], '16n');
 
     loop.start(0);
     Tone.getTransport().start();
 
     activePlayers[id] = { loop, players };
-
-    // Update button
     updatePlayBtn(id, true);
   }
 
