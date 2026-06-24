@@ -1008,75 +1008,86 @@
   var activePlayers = {};
   var timerIds = {};
 
-  function getAudioCtx() {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  function initAudio() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
     if (audioCtx.state === 'suspended') audioCtx.resume();
+    // Play a silent buffer to unlock audio on iOS
+    const buf = audioCtx.createBuffer(1, 1, 22050);
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    src.connect(audioCtx.destination);
+    src.start(0);
     return audioCtx;
   }
 
-  function playKick(ctx, time) {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.frequency.setValueAtTime(150, time);
-    osc.frequency.exponentialRampToValueAtTime(0.001, time + 0.3);
-    gain.gain.setValueAtTime(1, time);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
-    osc.start(time); osc.stop(time + 0.3);
+  function playKick(ctx, when) {
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.setValueAtTime(150, when);
+    o.frequency.exponentialRampToValueAtTime(0.01, when + 0.35);
+    g.gain.setValueAtTime(1.0, when);
+    g.gain.exponentialRampToValueAtTime(0.01, when + 0.35);
+    o.start(when); o.stop(when + 0.35);
   }
 
-  function playSnare(ctx, time) {
-    const noise = ctx.createBufferSource();
-    const buf = ctx.createBuffer(1, ctx.sampleRate * 0.15, ctx.sampleRate);
-    const data = buf.getChannelData(0);
-    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
-    noise.buffer = buf;
-    const gain = ctx.createGain();
-    noise.connect(gain); gain.connect(ctx.destination);
-    gain.gain.setValueAtTime(0.8, time);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
-    noise.start(time); noise.stop(time + 0.15);
+  function playSnare(ctx, when) {
+    const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.2), ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const g = ctx.createGain();
+    src.connect(g); g.connect(ctx.destination);
+    g.gain.setValueAtTime(0.9, when);
+    g.gain.exponentialRampToValueAtTime(0.01, when + 0.2);
+    src.start(when); src.stop(when + 0.2);
   }
 
-  function playHH(ctx, time, open) {
-    const dur = open ? 0.3 : 0.06;
-    const noise = ctx.createBufferSource();
-    const buf = ctx.createBuffer(1, ctx.sampleRate * dur, ctx.sampleRate);
-    const data = buf.getChannelData(0);
-    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
-    noise.buffer = buf;
+  function playHH(ctx, when, open) {
+    const dur = open ? 0.25 : 0.05;
+    const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * dur), ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
     const hpf = ctx.createBiquadFilter();
-    hpf.type = 'highpass'; hpf.frequency.value = 7000;
-    const gain = ctx.createGain();
-    noise.connect(hpf); hpf.connect(gain); gain.connect(ctx.destination);
-    gain.gain.setValueAtTime(0.5, time);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + dur);
-    noise.start(time); noise.stop(time + dur);
+    hpf.type = 'highpass'; hpf.frequency.value = 8000;
+    const g = ctx.createGain();
+    src.connect(hpf); hpf.connect(g); g.connect(ctx.destination);
+    g.gain.setValueAtTime(0.6, when);
+    g.gain.exponentialRampToValueAtTime(0.01, when + dur);
+    src.start(when); src.stop(when + dur);
   }
 
-  function playPerc(ctx, time) {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.frequency.setValueAtTime(300, time);
-    osc.frequency.exponentialRampToValueAtTime(0.001, time + 0.1);
-    gain.gain.setValueAtTime(0.6, time);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
-    osc.start(time); osc.stop(time + 0.1);
+  function playPerc(ctx, when) {
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.setValueAtTime(250, when);
+    o.frequency.exponentialRampToValueAtTime(0.01, when + 0.12);
+    g.gain.setValueAtTime(0.7, when);
+    g.gain.exponentialRampToValueAtTime(0.01, when + 0.12);
+    o.start(when); o.stop(when + 0.12);
   }
 
-  function triggerSound(ctx, trackName, time) {
-    const k = trackName.toLowerCase().trim();
-    if (k.includes('kick') || k === 'bd' || k === 'k' || k.includes('alt kick')) playKick(ctx, time);
-    else if (k.includes('snare') || k.includes('clap') || k === 'sn' || k.includes('alt snare')) playSnare(ctx, time);
-    else if (k.includes('open')) playHH(ctx, time, true);
-    else if (k.includes('hh') || k.includes('hihat') || k.includes('hat')) playHH(ctx, time, false);
-    else playPerc(ctx, time);
+  function triggerSound(ctx, trackName, when) {
+    try {
+      const k = trackName.toLowerCase().trim();
+      if (k.includes('kick') || k === 'bd' || k === 'k' || k.includes('alt kick')) playKick(ctx, when);
+      else if (k.includes('snare') || k.includes('clap') || k === 'sn' || k.includes('alt snare')) playSnare(ctx, when);
+      else if (k.includes('open')) playHH(ctx, when, true);
+      else if (k.includes('hh') || k.includes('hihat') || k.includes('hat')) playHH(ctx, when, false);
+      else playPerc(ctx, when);
+    } catch(e) {}
   }
 
   function togglePlay(id) {
+    // initAudio MUST be called synchronously in user gesture
+    const ctx = initAudio();
     if (activePlayers[id]) { stopBeat(id); return; }
-    const ctx = getAudioCtx();
     startBeat(id, ctx);
   }
 
@@ -1086,33 +1097,31 @@
     Object.keys(activePlayers).forEach(pid => stopBeat(pid));
 
     const bpm = b.bpm || 80;
-    const stepDur = 60 / bpm / 4; // 16th note duration in seconds
+    const stepDur = 60 / bpm / 4; // 16th note in seconds
     let step = 0;
-    let running = true;
+    let alive = true;
+    activePlayers[id] = { alive: true };
+    updatePlayBtn(id, true);
 
     function tick() {
-      if (!running) return;
+      if (!activePlayers[id] || !activePlayers[id].alive) return;
       const now = ctx.currentTime;
-      // Schedule next 2 steps ahead
-      for (let i = 0; i < 2; i++) {
-        const s = (step + i) % STEPS;
-        const t = now + i * stepDur;
-        b.tracks.forEach((track, ti) => {
-          if (b.pattern[ti] && b.pattern[ti][s]) triggerSound(ctx, track, t);
-        });
-      }
+      // Schedule 1 step ahead for accuracy
+      b.tracks.forEach((track, ti) => {
+        if (b.pattern[ti] && b.pattern[ti][step]) {
+          triggerSound(ctx, track, now + 0.01);
+        }
+      });
       highlightStep(id, step);
       step = (step + 1) % STEPS;
-      timerIds[id] = setTimeout(tick, stepDur * 1000 * 0.9);
+      timerIds[id] = setTimeout(tick, stepDur * 1000);
     }
 
     tick();
-    activePlayers[id] = { running: true };
-    updatePlayBtn(id, true);
   }
 
   function stopBeat(id) {
-    if (activePlayers[id]) activePlayers[id].running = false;
+    if (activePlayers[id]) activePlayers[id].alive = false;
     if (timerIds[id]) { clearTimeout(timerIds[id]); delete timerIds[id]; }
     delete activePlayers[id];
     clearHighlight(id);
