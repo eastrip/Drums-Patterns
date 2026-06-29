@@ -1050,6 +1050,42 @@
     src.start(when); src.stop(when + dur);
   }
 
+  function playClap(ctx, when) {
+    // Clap = 3 rapid bursts of filtered noise
+    for (var i = 0; i < 3; i++) {
+      var t = when + i * 0.012;
+      var buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.04), ctx.sampleRate);
+      var d = buf.getChannelData(0);
+      for (var j = 0; j < d.length; j++) d[j] = Math.random() * 2 - 1;
+      var src = ctx.createBufferSource();
+      src.buffer = buf;
+      var bpf = ctx.createBiquadFilter();
+      bpf.type = 'bandpass'; bpf.frequency.value = 1200; bpf.Q.value = 0.5;
+      var g = ctx.createGain();
+      src.connect(bpf); bpf.connect(g); g.connect(ctx.destination);
+      g.gain.setValueAtTime(i === 2 ? 1.0 : 0.5, t);
+      g.gain.exponentialRampToValueAtTime(0.01, t + 0.08);
+      src.start(t); src.stop(t + 0.08);
+    }
+  }
+
+  function playShaker(ctx, when) {
+    // Shaker = short high noise burst with bandpass
+    var dur = 0.03;
+    var buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * dur), ctx.sampleRate);
+    var d = buf.getChannelData(0);
+    for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    var src = ctx.createBufferSource();
+    src.buffer = buf;
+    var bpf = ctx.createBiquadFilter();
+    bpf.type = 'bandpass'; bpf.frequency.value = 5000; bpf.Q.value = 2;
+    var g = ctx.createGain();
+    src.connect(bpf); bpf.connect(g); g.connect(ctx.destination);
+    g.gain.setValueAtTime(0.5, when);
+    g.gain.exponentialRampToValueAtTime(0.01, when + dur);
+    src.start(when); src.stop(when + dur);
+  }
+
   function playPerc(ctx, when) {
     var o = ctx.createOscillator(), g = ctx.createGain();
     o.connect(g); g.connect(ctx.destination);
@@ -1063,11 +1099,21 @@
   function triggerSound(ctx, trackName, when) {
     try {
       var k = trackName.toLowerCase().trim();
-      if (k.includes('kick') || k === 'bd' || k === 'k' || k.includes('alt kick')) playKick(ctx, when);
-      else if (k.includes('snare') || k.includes('clap') || k === 'sn' || k.includes('alt snare')) playSnare(ctx, when);
-      else if (k.includes('open')) playHH(ctx, when, true);
-      else if (k.includes('hh') || k.includes('hihat') || k.includes('hat')) playHH(ctx, when, false);
-      else playPerc(ctx, when);
+      if (k.includes('kick') || k === 'bd' || k === 'k' || k.includes('alt kick')) {
+        playKick(ctx, when);
+      } else if (k.includes('clap') || k === 'cp') {
+        playClap(ctx, when);
+      } else if (k.includes('shaker') || k.includes('shake')) {
+        playShaker(ctx, when);
+      } else if (k.includes('snare') || k === 'sn' || k === 'sd' || k.includes('alt snare')) {
+        playSnare(ctx, when);
+      } else if (k.includes('open')) {
+        playHH(ctx, when, true);
+      } else if (k.includes('hh') || k.includes('hihat') || k.includes('hat')) {
+        playHH(ctx, when, false);
+      } else {
+        playKick(ctx, when); // default
+      }
     } catch(e) {}
   }
 
