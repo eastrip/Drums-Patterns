@@ -149,6 +149,10 @@
   .beat-block.locked .btn-del-track { opacity: 0; pointer-events: none; }
   .beat-block.locked .color-swatch { pointer-events: none; }
 
+  .btn-icon.btn-play { border-color: var(--beat-color, var(--border)); color: var(--beat-color, var(--muted)); }
+  .btn-icon.btn-play.playing { background: var(--beat-color, var(--accent)); color: #000; border-color: var(--beat-color, var(--accent)); }
+  .cell.playing-step { outline: 2px solid rgba(255,255,255,0.5); outline-offset: -1px; }
+
   /* ── Beat header ── */
   .beat-header {
     display: flex;
@@ -480,6 +484,8 @@
   const SVG_LOCK_CLOSED = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
   const SVG_ERASE = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 5H9l-7 7 7 7h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z"/><line x1="18" y1="9" x2="12" y2="15"/><line x1="12" y1="9" x2="18" y2="15"/></svg>';
   const SVG_CROSS = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+  const SVG_PLAY = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>';
+  const SVG_STOP = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16"/></svg>';
 
   /* ── Safe storage ── */
   var _store = (function() {
@@ -789,7 +795,13 @@
     btnDel.innerHTML = SVG_CROSS;
     btnDel.title = 'Supprimer ce beat';
     btnDel.onclick = () => deleteBeat(beat.id);
-    hdr.append(nameInput, btnEdit, btnClear, btnDel);
+    const btnPlay = document.createElement('button');
+    btnPlay.className = 'btn-icon btn-play';
+    btnPlay.dataset.beatId = beat.id;
+    btnPlay.innerHTML = SVG_PLAY;
+    btnPlay.title = 'Jouer';
+    btnPlay.onclick = function() { togglePlay(beat.id); };
+    hdr.append(nameInput, btnPlay, btnEdit, btnClear, btnDel);
     block.appendChild(hdr);
 
     const meta = document.createElement('div');
@@ -986,6 +998,135 @@
   }
 
   function uid() { return String(Date.now()) + String(Math.random()).slice(2); }
+
+  /* ── Audio engine ── */
+  var audioCtx = null;
+  var activePlayers = {};
+  var timerIds = {};
+
+  function initAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    var buf = audioCtx.createBuffer(1, 1, 22050);
+    var src = audioCtx.createBufferSource();
+    src.buffer = buf; src.connect(audioCtx.destination); src.start(0);
+    return audioCtx;
+  }
+
+  function playKick(ctx, when) {
+    var o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.setValueAtTime(150, when);
+    o.frequency.exponentialRampToValueAtTime(0.01, when + 0.35);
+    g.gain.setValueAtTime(1.0, when);
+    g.gain.exponentialRampToValueAtTime(0.01, when + 0.35);
+    o.start(when); o.stop(when + 0.35);
+  }
+
+  function playSnare(ctx, when) {
+    var buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.2), ctx.sampleRate);
+    var d = buf.getChannelData(0);
+    for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    var src = ctx.createBufferSource(), g = ctx.createGain();
+    src.buffer = buf; src.connect(g); g.connect(ctx.destination);
+    g.gain.setValueAtTime(0.9, when);
+    g.gain.exponentialRampToValueAtTime(0.01, when + 0.2);
+    src.start(when); src.stop(when + 0.2);
+  }
+
+  function playHH(ctx, when, open) {
+    var dur = open ? 0.25 : 0.05;
+    var buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * dur), ctx.sampleRate);
+    var d = buf.getChannelData(0);
+    for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    var src = ctx.createBufferSource();
+    src.buffer = buf;
+    var hpf = ctx.createBiquadFilter();
+    hpf.type = 'highpass'; hpf.frequency.value = 8000;
+    var g = ctx.createGain();
+    src.connect(hpf); hpf.connect(g); g.connect(ctx.destination);
+    g.gain.setValueAtTime(0.6, when);
+    g.gain.exponentialRampToValueAtTime(0.01, when + dur);
+    src.start(when); src.stop(when + dur);
+  }
+
+  function playPerc(ctx, when) {
+    var o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.setValueAtTime(250, when);
+    o.frequency.exponentialRampToValueAtTime(0.01, when + 0.12);
+    g.gain.setValueAtTime(0.7, when);
+    g.gain.exponentialRampToValueAtTime(0.01, when + 0.12);
+    o.start(when); o.stop(when + 0.12);
+  }
+
+  function triggerSound(ctx, trackName, when) {
+    try {
+      var k = trackName.toLowerCase().trim();
+      if (k.includes('kick') || k === 'bd' || k === 'k' || k.includes('alt kick')) playKick(ctx, when);
+      else if (k.includes('snare') || k.includes('clap') || k === 'sn' || k.includes('alt snare')) playSnare(ctx, when);
+      else if (k.includes('open')) playHH(ctx, when, true);
+      else if (k.includes('hh') || k.includes('hihat') || k.includes('hat')) playHH(ctx, when, false);
+      else playPerc(ctx, when);
+    } catch(e) {}
+  }
+
+  function togglePlay(id) {
+    var ctx = initAudio();
+    if (activePlayers[id]) { stopBeat(id); return; }
+    startBeat(id, ctx);
+  }
+
+  function startBeat(id, ctx) {
+    var b = beats.find(function(b) { return b.id === id; });
+    if (!b) return;
+    Object.keys(activePlayers).forEach(function(pid) { stopBeat(pid); });
+    var bpm = b.bpm || 80;
+    var stepDur = 60 / bpm / 4;
+    var step = 0;
+    activePlayers[id] = { alive: true };
+    updatePlayBtn(id, true);
+    function tick() {
+      if (!activePlayers[id] || !activePlayers[id].alive) return;
+      var now = ctx.currentTime;
+      b.tracks.forEach(function(track, ti) {
+        if (b.pattern[ti] && b.pattern[ti][step]) triggerSound(ctx, track, now + 0.01);
+      });
+      highlightStep(id, step);
+      step = (step + 1) % STEPS;
+      timerIds[id] = setTimeout(tick, stepDur * 1000);
+    }
+    tick();
+  }
+
+  function stopBeat(id) {
+    if (activePlayers[id]) activePlayers[id].alive = false;
+    if (timerIds[id]) { clearTimeout(timerIds[id]); delete timerIds[id]; }
+    delete activePlayers[id];
+    clearHighlight(id);
+    updatePlayBtn(id, false);
+  }
+
+  function updatePlayBtn(id, playing) {
+    var btn = document.querySelector('.btn-play[data-beat-id="' + id + '"]');
+    if (!btn) return;
+    btn.innerHTML = playing ? SVG_STOP : SVG_PLAY;
+    btn.title = playing ? 'Stop' : 'Jouer';
+    btn.classList.toggle('playing', playing);
+  }
+
+  function highlightStep(id, step) {
+    var block = document.querySelector('.beat-block[data-id="' + id + '"]');
+    if (!block) return;
+    block.querySelectorAll('.cell.playing-step').forEach(function(c) { c.classList.remove('playing-step'); });
+    block.querySelectorAll('[data-step="' + step + '"]').forEach(function(c) { c.classList.add('playing-step'); });
+  }
+
+  function clearHighlight(id) {
+    var block = document.querySelector('.beat-block[data-id="' + id + '"]');
+    if (!block) return;
+    block.querySelectorAll('.cell.playing-step').forEach(function(c) { c.classList.remove('playing-step'); });
+  }
 
   loadFromStorage();
 </script>
