@@ -84,7 +84,7 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 10px;
-    margin-bottom: 28px;
+    margin-bottom: 10px;
     padding: 0 8px;
   }
   .btn-sort {
@@ -95,6 +95,40 @@
     text-transform: uppercase;
   }
   .btn-sort:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+  .search-bar {
+    padding: 0 8px;
+    margin-bottom: 20px;
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .search-bar input {
+    width: 100%;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 16px;
+    padding: 8px 28px 8px 0;
+    outline: none;
+  }
+  .search-bar input::placeholder { color: var(--muted); font-size: 12px; }
+  .search-bar input:focus { border-bottom-color: var(--accent); }
+  .search-clear {
+    position: absolute;
+    right: 8px;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0;
+    display: none;
+    line-height: 1;
+  }
+  .search-clear.visible { display: block; }
+  .search-clear:hover { color: var(--text); }
   .bpm-filter {
     display: flex;
     align-items: center;
@@ -462,6 +496,10 @@
     <input type="number" id="bpm-max" min="20" max="300" placeholder="—" oninput="applyBpmFilter()">
   </div>
 </div>
+<div class="search-bar">
+  <input type="text" id="search-input" placeholder="Rechercher un beat..." oninput="onSearchInput()">
+  <button class="search-clear" id="search-clear" onclick="clearSearch()">✕</button>
+</div>
 <div id="beats-container"></div>
 <div id="empty-state">
   <h2>Aucun beat</h2>
@@ -739,18 +777,36 @@
     saveToStorage();
   }
 
+  function onSearchInput() {
+    const input = document.getElementById('search-input');
+    const clear = document.getElementById('search-clear');
+    if (clear) clear.classList.toggle('visible', input.value.length > 0);
+    renderAll();
+  }
+
+  function clearSearch() {
+    const input = document.getElementById('search-input');
+    const clear = document.getElementById('search-clear');
+    if (input) input.value = '';
+    if (clear) clear.classList.remove('visible');
+    renderAll();
+  }
+
   /* ── BPM Filter ── */
   function applyBpmFilter() { renderAll(); }
 
   function getFilteredBeats() {
     const minEl = document.getElementById('bpm-min');
     const maxEl = document.getElementById('bpm-max');
+    const searchEl = document.getElementById('search-input');
     const min = minEl && minEl.value !== '' ? parseInt(minEl.value) : null;
     const max = maxEl && maxEl.value !== '' ? parseInt(maxEl.value) : null;
+    const query = searchEl ? searchEl.value.toLowerCase().trim() : '';
     return beats.filter(b => {
       const bpm = b.bpm || 80;
       if (min !== null && bpm < min) return false;
       if (max !== null && bpm > max) return false;
+      if (query && !b.name.toLowerCase().includes(query)) return false;
       return true;
     });
   }
@@ -1130,10 +1186,11 @@
     var bpm = b.bpm || 80;
     var stepDur = 60 / bpm / 4;
     var step = 0;
-    activePlayers[id] = { alive: true };
+    var token = { alive: true };
+    activePlayers[id] = token;
     updatePlayBtn(id, true);
     function tick() {
-      if (!activePlayers[id] || !activePlayers[id].alive) return;
+      if (!token.alive) return;
       var now = ctx.currentTime;
       b.tracks.forEach(function(track, ti) {
         if (b.pattern[ti] && b.pattern[ti][step]) triggerSound(ctx, track, now + 0.01);
