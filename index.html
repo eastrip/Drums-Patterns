@@ -1231,23 +1231,48 @@
     var b = beats.find(function(b) { return b.id === id; });
     if (!b) return;
     Object.keys(activePlayers).forEach(function(pid) { stopBeat(pid); });
+
     var bpm = b.bpm || 80;
-    var stepDur = 60 / bpm / 4;
+    var stepDur = 60 / bpm / 4; // 16th note in seconds
+    var lookahead = 0.1;        // schedule 100ms ahead
+    var scheduleInterval = 50;  // check every 50ms
+
     var step = 0;
+    var nextStepTime = ctx.currentTime + 0.05;
     var token = { alive: true };
     activePlayers[id] = token;
     updatePlayBtn(id, true);
-    function tick() {
+
+    function scheduler() {
       if (!token.alive) return;
-      var now = ctx.currentTime;
-      b.tracks.forEach(function(track, ti) {
-        if (b.pattern[ti] && b.pattern[ti][step]) triggerSound(ctx, track, now + 0.01);
-      });
-      highlightStep(id, step);
-      step = (step + 1) % STEPS;
-      timerIds[id] = setTimeout(tick, stepDur * 1000);
+
+      // Schedule all steps that fall within the lookahead window
+      while (nextStepTime < ctx.currentTime + lookahead) {
+        var currentStep = step;
+        var when = nextStepTime;
+
+        b.tracks.forEach(function(track, ti) {
+          if (b.pattern[ti] && b.pattern[ti][currentStep]) {
+            triggerSound(ctx, track, when);
+          }
+        });
+
+        // Visual highlight (delayed to match audio time)
+        (function(s, t) {
+          var delay = Math.max(0, (t - ctx.currentTime) * 1000);
+          setTimeout(function() {
+            if (token.alive) highlightStep(id, s);
+          }, delay);
+        }(currentStep, when));
+
+        step = (step + 1) % STEPS;
+        nextStepTime += stepDur;
+      }
+
+      timerIds[id] = setTimeout(scheduler, scheduleInterval);
     }
-    tick();
+
+    scheduler();
   }
 
   function stopBeat(id) {
