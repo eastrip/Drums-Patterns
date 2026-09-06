@@ -996,29 +996,72 @@
     ov.className = 'modal-overlay';
     ov.style.alignItems = 'flex-end';
     ov.style.padding = '0';
+
     const panel = document.createElement('div');
     panel.style.cssText = 'background:#1a1a1a;border-top:3px solid #a0e080;padding:20px 16px 32px;width:100%;';
+
     const h2 = document.createElement('div');
     h2.style.cssText = 'font-family:Bebas Neue,sans-serif;font-size:20px;letter-spacing:1px;color:#f0f0f0;margin-bottom:8px;';
     h2.textContent = 'Restaurer';
+
+    // Drop zone
+    const dropZone = document.createElement('div');
+    dropZone.style.cssText = 'border:2px dashed #444;padding:16px;text-align:center;margin-bottom:10px;cursor:pointer;transition:border-color 0.2s;';
+    dropZone.innerHTML = '<span style="font-size:11px;color:#666;letter-spacing:1px;text-transform:uppercase;">Déposer le fichier JSON ici<br>ou <span style="color:#a0e080;text-decoration:underline;">parcourir</span></span>';
+
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.json';
+    fileInput.style.display = 'none';
+
+    const processFile = (file) => {
+      if (!file || !file.name.endsWith('.json')) { showToast('Fichier .json requis'); return; }
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        ta.value = e.target.result;
+        ta.style.borderColor = '#a0e080';
+      };
+      reader.readAsText(file);
+    };
+
+    fileInput.onchange = (e) => { if (e.target.files[0]) processFile(e.target.files[0]); };
+    dropZone.onclick = () => fileInput.click();
+
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.style.borderColor = '#a0e080';
+    });
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.style.borderColor = '#444';
+    });
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.style.borderColor = '#444';
+      if (e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]);
+    });
+
     const hint = document.createElement('div');
-    hint.style.cssText = 'font-size:10px;color:#666;margin-bottom:10px;line-height:1.5;';
-    hint.textContent = 'Colle le contenu de ton fichier beats.json puis appuie sur Restaurer.';
+    hint.style.cssText = 'font-size:10px;color:#666;margin-bottom:6px;';
+    hint.textContent = 'Ou colle le contenu JSON ci-dessous :';
+
     const ta = document.createElement('textarea');
-    ta.style.cssText = 'display:block;width:100%;height:150px;background:#0e0e0e;border:1px solid #444;color:#a0e080;font-family:Space Mono,monospace;font-size:10px;padding:10px;resize:none;outline:none;-webkit-user-select:text;user-select:text;';
+    ta.style.cssText = 'display:block;width:100%;height:100px;background:#0e0e0e;border:1px solid #444;color:#a0e080;font-family:Space Mono,monospace;font-size:10px;padding:10px;resize:none;outline:none;-webkit-user-select:text;user-select:text;';
     ta.placeholder = 'Colle ton JSON ici...';
+
     const btns = document.createElement('div');
     btns.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;';
+
     const bCancel = document.createElement('button');
     bCancel.style.cssText = 'background:transparent;color:#666;border:1px solid #333;padding:10px;text-transform:uppercase;font-size:12px;font-family:Space Mono,monospace;cursor:pointer;letter-spacing:1px;';
     bCancel.textContent = 'Annuler';
     bCancel.onclick = () => document.body.removeChild(ov);
+
     const bOk = document.createElement('button');
     bOk.style.cssText = 'background:#a0e080;color:#000;border:none;padding:10px;text-transform:uppercase;font-size:12px;font-weight:700;font-family:Space Mono,monospace;cursor:pointer;letter-spacing:1px;';
     bOk.textContent = 'Restaurer';
     bOk.onclick = () => {
       const text = ta.value.trim();
-      if (!text) { showToast('Rien a coller'); return; }
+      if (!text) { showToast('Rien a restaurer'); return; }
       try {
         const data = JSON.parse(text);
         if (!data.beats || !Array.isArray(data.beats)) throw new Error();
@@ -1039,8 +1082,9 @@
         showToast('Restaure !');
       } catch(e) { showToast('JSON invalide'); }
     };
+
     btns.append(bCancel, bOk);
-    panel.append(h2, hint, ta, btns);
+    panel.append(h2, dropZone, fileInput, hint, ta, btns);
     ov.appendChild(panel);
     document.body.appendChild(ov);
     setTimeout(() => ta.focus(), 50);
