@@ -1100,7 +1100,7 @@
   function uid() { return String(Date.now()) + String(Math.random()).slice(2); }
 
   /* ── Drum samples (URLs GitHub Pages) ── */
-  var BASE_URL = 'https://eastrip.github.io/Drums-Patterns/samples/';
+  var BASE_URL = 'https://eastrip.github.io/Drums-Patterns/Samples/';
   var SAMPLES = {
     kick:   BASE_URL + 'kick.wav',
     snare:  BASE_URL + 'snare.wav',
@@ -1115,10 +1115,23 @@
 
   function loadSample(ctx, name) {
     if (_bufferCache[name]) return Promise.resolve(_bufferCache[name]);
-    return fetch(SAMPLES[name])
-      .then(function(r) { return r.arrayBuffer(); })
-      .then(function(ab) { return ctx.decodeAudioData(ab); })
-      .then(function(buf) { _bufferCache[name] = buf; return buf; });
+    return new Promise(function(resolve, reject) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', SAMPLES[name], true);
+      xhr.responseType = 'arraybuffer';
+      xhr.onload = function() {
+        if (xhr.status === 200) {
+          ctx.decodeAudioData(xhr.response, function(buf) {
+            _bufferCache[name] = buf;
+            resolve(buf);
+          }, reject);
+        } else {
+          reject(new Error('HTTP ' + xhr.status));
+        }
+      };
+      xhr.onerror = reject;
+      xhr.send();
+    });
   }
 
   /* ── Audio engine ── */
