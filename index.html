@@ -606,7 +606,7 @@
   function addBeat() {
     beatCounter++;
     const tracks = [...DEFAULT_TRACKS];
-    const colors = [...DEFAULT_COLORS];
+    const colors = tracks.map(() => randomAccent());
     beats.unshift({
       id: uid(), name: 'Beat ' + beatCounter, bpm: 80,
       accent: randomAccent(),
